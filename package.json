@@ -17,7 +17,7 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "test": "bun test",
-    "check": "bun run typecheck && bun run lint && bun test",
+    "check": "bun run typecheck && bun run lint && bun scripts/gen-command-table.ts --check && bun test",
     "docs:commands": "bun scripts/gen-command-table.ts"
   },
   "dependencies": {

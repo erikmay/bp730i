@@ -1,0 +1,18 @@
+ts	phase	decision	why	evidence	result
+2026-10-09T13:45:38Z	frame	exit: tsc+lint+tests pass, CLI dry-run renders sample PDF to ZPL and EZPL, raster round-trip PNG checked, README with sourced command table, draft PR open	define done before starting	task brief	open
+2026-10-09T13:45:38Z	download	driver SHA-256 matches; GoLabel URL returns HTTP 403 AccessDenied	verify inputs	~/re-bp730i/dl	driver ok, GoLabel blocked
+2026-10-09T13:45:38Z	re	Windows queue BP730i maps to GDX (EZPL) module, model Godex_RT730i	INF + Driver.d	BarcodePrinter.inf:258, xg#gdx Driver.d:396	found
+2026-10-09T13:49:41Z	design	one typed job model + EZPL/ZPL encoder registry + cups/tcp/file transports; rejected per-language builder functions composed in CLI	keeps language branching in one place; callers never see command syntax	src/	chosen
+2026-10-09T13:49:41Z	design	PNG/JPEG decode with pure-JS pngjs + jpeg-js; PDF via pdftoppm -gray to stdout PGM stream	no native modules; pdftoppm already on the Mac	src/render.ts	chosen
+2026-10-09T13:49:41Z	design	no direct USB transport	macOS needs libusb or IOKit FFI, both native; CUPS raw already works	'-	decided
+2026-10-09T13:49:41Z	subtract	removed pbm-to-zpl.ts PoC	library ^GFA encoder supersedes it	git rm	done
+2026-10-09T14:00:07Z	download	GoLabel taken from current Labelident CDN link on bp730.html (old URL 403)	same vendor, anonymous link on product page	sha256 a08d5b39..., notes/golabel-and-docs.md	done
+2026-10-09T14:00:07Z	ezpl	EZPL encoder follows Windows driver order: ^A ^O ^D ^S ^H ^C1, per page ^P ^Q ^W [~Q ^E] ^L, Q header ends CR, raw 1=black bytes	driver is the primary source; GoLabel agrees except LF after Q header	notes/ezpl.md, src/lang/ezpl.ts	written
+2026-10-09T14:00:07Z	ezpl	status query sends ^XSET,IMMEDIATE,1 before ~S,STATUS	driver config module does this when the channel opens	CM FUN_180001430	written
+2026-10-09T14:00:07Z	ezpl	reset uses ~Z although Seagull labels its ~Z job 'Print Configuration'	GoLabel menu 'reset printer' and EZPL manual both say ~Z = reset	GL SvgArtiste.cs:5388, EZPL m.p87	unverified, flagged
+2026-10-09T14:01:46Z	zpl-re	ZPL command map written from decompiled PrintModule/ConfigModule + .d tables	binary is ground truth	work/zpl/decomp, notes/zpl.md	done
+2026-10-09T14:06:00Z	zpl	ZPL keeps ^GFA hex for images; ~DG+^XG only for cut-every-n/batch-cut	^GFA is the only path proven on this printer (user PoC); driver uses ~DG Z64 which GZPL may not accept	notes/zpl.md 2.3, src/lang/zpl.ts	written
+2026-10-09T14:06:00Z	zpl	map Godex darkness 0..19 to ~SD round(d*30/19)	one darkness scale in the API; driver passes 0..30 unchanged so no vendor mapping exists	ZPL-PM FUN_180016a20	guess, unverified
+2026-10-09T14:06:00Z	zpl	stop position and sensor select unsupported in ZPL, CLI warns	no driver command for them in GZPL; ~TA is relative and different	notes/zpl.md 2.1	written
+2026-10-09T14:06:00Z	test	reference-table test tightened after mutation (removing ^Db) did not fail it	prefix match let ^Db pass as ^D	test/commands.test.ts	mutations now caught
+2026-10-09T14:06:00Z	default	default language EZPL	native language of the Windows BP730i queue, all settings have commands, raw binary images half the size of ZPL hex	INF:258, notes/ezpl.md	decided; ZPL kept as fallback
