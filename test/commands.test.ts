@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import { CONTROLS, decodeGraphics, encodeJob, encodeSettings, type PrintSettings, QUERIES } from "../src/index.ts";
 import type { Bitmap } from "../src/raster.ts";
 import { COMMANDS } from "../src/reference.ts";

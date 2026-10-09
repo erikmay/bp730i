@@ -2,6 +2,7 @@
 import { mkdir } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { parseArgs } from "node:util";
+
 import {
   CONTROLS,
   type Control,

@@ -238,7 +238,7 @@ To repeat the extraction, run `bun tools/re/fetch-and-unpack.ts [dir] [--ghidra]
 ## Develop
 
 ```sh
-bun run check        # tsc, biome, README table check, tests
-bun run format       # biome with fixes
+bun run check        # tsc, oxlint, oxfmt check, README table check, tests
+bun run format       # oxfmt, then oxlint --fix
 bun scripts/make-sample-pdf.ts samples/sample-100x150.pdf   # synthetic 2-page test PDF
 ```

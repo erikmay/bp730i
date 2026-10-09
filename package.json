@@ -1,21 +1,22 @@
 {
   "name": "bp730i",
   "version": "0.1.0",
-  "description": "Driverless printing for the Labelident BP730i (Godex RT730i) label printer: EZPL output over CUPS or TCP",
-  "type": "module",
   "private": true,
+  "description": "Driverless printing for the Labelident BP730i (Godex RT730i) label printer: EZPL output over CUPS or TCP",
+  "license": "MIT",
+  "bin": {
+    "bp730i": "src/cli.ts"
+  },
+  "type": "module",
   "module": "src/index.ts",
   "exports": {
     ".": "./src/index.ts"
   },
-  "bin": {
-    "bp730i": "src/cli.ts"
-  },
   "scripts": {
     "bp730i": "bun src/cli.ts",
     "typecheck": "tsc --noEmit",
-    "lint": "biome check .",
-    "format": "biome check --write .",
+    "lint": "oxlint --deny-warnings && oxfmt --check",
+    "format": "oxfmt && oxlint --fix",
     "test": "bun test",
     "check": "bun run typecheck && bun run lint && bun scripts/gen-command-table.ts --check && bun test",
     "docs:commands": "bun scripts/gen-command-table.ts"
@@ -26,11 +27,11 @@
     "pngjs": "^7.0.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.15",
     "@types/bun": "latest",
     "@types/emscripten": "^1.41.6",
     "@types/pngjs": "^6.0.5",
+    "oxfmt": "^0.72.0",
+    "oxlint": "^1.87.0",
     "typescript": "^7.0.2"
-  },
-  "license": "MIT"
+  }
 }

@@ -1,4 +1,5 @@
 import { parseArgs } from "node:util";
+
 import { DEFAULT_QUEUE, DEFAULT_TCP_PORT, describeReply, exchange, QUERIES, type Query } from "../src/index.ts";
 
 const { values } = parseArgs({

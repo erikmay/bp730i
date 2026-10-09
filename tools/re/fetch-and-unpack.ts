@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
+
 import { $ } from "bun";
 
 const args = Bun.argv.slice(2);

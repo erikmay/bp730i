@@ -100,6 +100,7 @@ export async function exchange(
   if (quietMs > 0) {
     const start = Date.now();
     lastData = start;
+    // oxlint-disable-next-line no-unmodified-loop-condition -- the socket close callback sets isClosed during the sleep
     while (!isClosed && Date.now() - start < totalMs && Date.now() - lastData < quietMs) await Bun.sleep(20);
   }
   socket.end();

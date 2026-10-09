@@ -3,6 +3,7 @@ import { init, type WrappedPdfiumModule } from "@embedpdf/pdfium";
 import pdfiumWasm from "@embedpdf/pdfium/pdfium.wasm" with { type: "file" };
 import jpeg from "jpeg-js";
 import { PNG } from "pngjs";
+
 import type { GrayImage } from "./raster.ts";
 import { DPI } from "./units.ts";
 

@@ -1,4 +1,5 @@
 import { PNG } from "pngjs";
+
 import { type Bitmap, bitmapToGray } from "./raster.ts";
 
 export function bitmapToPng(bmp: Bitmap): Uint8Array {
