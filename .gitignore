@@ -1,4 +1,8 @@
 *.pbm
 *.zpl
+*.ezpl
 *.pdf
+*.png
 node_modules/
+samples/
+out/
