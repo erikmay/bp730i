@@ -54,9 +54,7 @@ This tool sends only EZPL, so it cannot lock the printer to another language. Th
 1. Switch the printer off and on.
 2. Send an EZPL job first, for example `bp730i self-test`.
 
-To make the printer ignore other languages permanently, set the command language to EZPL in the printer menu instead of Auto. That is optional.
-
-The EZPL manual documents a command switch (`~S,ESG`, `~S,ESZ`, `~S,ESA`). This tool does not send it: it is unverified, and an EZPL command cannot reach a printer that is locked to ZPL. See [coverage](docs/reverse-engineering/coverage.md) for the evidence.
+The EZPL manual confirms this behavior: "When a printer switch to certain language, it can auto detect and switch again by rebooting printer" (EZPL manual Rev. O.4, p. 84). It documents a command switch (`~S,ESG`, `~S,ESZ`, `~S,ESA`), but calls it temporary and gives no way back from ZPL without a reboot. This tool does not send the switch: it adds nothing when every job is EZPL, and an EZPL command probably cannot reach a printer that is locked to ZPL, because `~V` cannot. The RT730i manual lists no menu item for the command language. See [coverage](docs/reverse-engineering/coverage.md) for the evidence.
 
 ## CLI reference
 
