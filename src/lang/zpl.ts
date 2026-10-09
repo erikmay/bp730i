@@ -57,16 +57,16 @@ function encodeJob(job: Job): Uint8Array {
     return encodeText(out);
   }
   job.pages.forEach((page, i) => {
-    out += `~DGR:BP730I${i}.GRF,${page.data.length},${page.bytesPerRow},${hex(page)}${CRLF}`;
+    out += `~DGR:BP${i}.GRF,${page.data.length},${page.bytesPerRow},${hex(page)}${CRLF}`;
   });
   let label = 0;
   job.pages.forEach((page, i) => {
     for (let c = 0; c < job.copies; c++, label++) {
-      out += `^XA^MM${plan.cutAfter[label] ? "C" : "T"}${CRLF}^FO0,0^XGR:BP730I${i}.GRF,1,1^FS${CRLF}`;
+      out += `^XA^MM${plan.cutAfter[label] ? "C" : "T"}${CRLF}^FO0,0^XGR:BP${i}.GRF,1,1^FS${CRLF}`;
       out += `${inverseBox(s, page)}^PQ1,0,1,Y${CRLF}^XZ${CRLF}`;
     }
   });
-  out += `^XA^IDR:BP730I*.GRF^XZ${CRLF}`;
+  out += `^XA^IDR:BP*.GRF^XZ${CRLF}`;
   return encodeText(out);
 }
 

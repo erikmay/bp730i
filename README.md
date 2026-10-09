@@ -2,7 +2,7 @@
 
 A Bun library and CLI that prints on the Labelident BP730i label printer from macOS without a vendor driver. The BP730i is a rebranded Godex RT730i (300 dpi, 105.7 mm print width). The tool renders PDF, PNG and JPEG files to 1-bit labels and sends them as EZPL or ZPL. It sends them through a raw CUPS queue (USB) or TCP port 9100.
 
-Every command comes from the decompiled Windows driver (`Generic_BP_v2023.2.exe`, a Seagull Scientific driver) and from GoLabel II. The [command reference](#command-reference) names the source of each command.
+Most commands come from the decompiled Windows driver (`Generic_BP_v2023.2.exe`, a Seagull Scientific driver) and from GoLabel II. A few come only from the Godex EZPL manual or the Zebra ZPL language. The [command reference](#command-reference) names the source of each command.
 
 > **Hardware status.** Only the ZPL `^GFA` raster path is confirmed on a real BP730i: the proof of concept printed a 100 x 150 mm label correctly. The EZPL output and all settings, calibration, reset and query commands are **unverified**. To check them, run the [hardware check](#check-the-commands-on-the-printer) on the Mac.
 
@@ -30,7 +30,7 @@ bp730i setup                    # run them (use sudo if lpadmin asks for it)
 bp730i setup --uri 'usb://...'  # if lpinfo -v does not list the printer
 ```
 
-The command finds the USB URI with `lpinfo -v` (the printer reports itself as `BP730i`). Running it again updates the same queue.
+The command takes the first USB URI from `lpinfo -v` that contains `BP730`. Your existing queue uses `usb:///BP730i?serial=190307B1`, so it matches. Running the command again updates the same queue.
 
 ## Print
 
@@ -76,7 +76,7 @@ Label and media options (all lengths in mm):
 | `--size WxL` | width 4..106, length 3..762 | `^W`, `^Q` | `^PW`, `^LL` |
 | `--gap MM` | gap media (default type, 3 mm) | `^Qlen,gap` | `^MNW` (size not sent) |
 | `--mark MM`, `--mark-offset MM` | black-mark media | `^Qlen,mark,offset±` | `^MNM` (sizes not sent) |
-| `--continuous [MM]` | continuous media, extra feed | `^Qlen,0,feed` | `^MNN` |
+| `--continuous MM` | continuous media, extra feed (0 for none) | `^Qlen,0,feed` | `^MNN` |
 | `--sensor TYPE` | `reflective`, `see-through`, `auto` | `^G` | no command, ignored |
 | `--method TYPE` | `dt` direct thermal, `tt` thermal transfer | `^AD`, `^AT` | `^MTD`, `^MTT` |
 | `--darkness N` | 0..19 (Godex scale) | `^H` | `~SD` (scaled to 0..30) |
@@ -88,7 +88,7 @@ Label and media options (all lengths in mm):
 | `--home-y MM` | -8.4..8.4 (±100 dots), printer vertical offset | `~Q` (dots) | `^LT` |
 | `--mirror`, `--inverse` | whole label | `^LM`, `^LI` | `^PMY`, `^LRY` box |
 
-A setting you leave out produces no command. The printer then keeps its stored value. The Windows driver works the same way ("Use Current Printer Settings"). EZPL stores these settings permanently. In ZPL, `settings --save` adds `^JUS`.
+A setting you leave out produces no command. The printer then keeps its stored value. One exception: in EZPL the label length and the media type are one command (`^Q`), so `--size` without `--mark` or `--continuous` also sets gap media with a 3 mm gap. The Windows driver uses the same default. The Windows driver works the same way ("Use Current Printer Settings"). EZPL stores these settings permanently. In ZPL, `settings --save` adds `^JUS`.
 
 Labelident's support PDF gives useful stop positions: 12..16 mm for tearing and 28..30 mm with a cutter. Use the `=` form for negative values: `--home-y=-2`.
 
@@ -152,13 +152,13 @@ bun scripts/hardware-check.ts --size 100x150          # over CUPS
 bun scripts/hardware-check.ts --host 192.168.1.50     # over TCP, adds the query steps
 ```
 
-The script prints the synthetic sample label in about 25 steps. Each step says what you should see, then asks `y`, `n` or `s` (skip) and an optional note. It writes the answers to `hardware-check-<time>.md`. Steps for the cutter and the peeler ask first whether you have one. At the end the script sends `~S,ESA`, so the printer returns to automatic language detection. If you stop the script early, run `bp730i language auto`.
+The script prints the synthetic sample label in 18 steps (23 with `--host`) and uses about 35 labels. The first step prints a configuration label: keep it, because the check changes stored settings. At the end the script shows the `settings` command that restores them. Each step says what you should see, then asks `y`, `n` or `s` (skip) and an optional note. It writes the answers to `hardware-check-<time>.md`. Steps for the cutter and the peeler ask first whether you have one. At the end the script sends `~S,ESA`, so the printer returns to automatic language detection. If you stop the script early, run `bp730i language auto`.
 
 For each step marked "as expected", set `hardware: "verified"` for its commands in `src/reference.ts`, then run `bun run docs:commands` to update the table below.
 
 ## Can plain commands replace the Windows driver?
 
-**For EZPL, yes. Every label-size and media setting of the Windows driver is a plain EZPL command.** The Seagull driver has no side channel. Its print module writes all settings into the same byte stream as the label, and its config module sends a few utility commands (`~S,SENSOR`, `^G`, `^XSET,MEMORY`, `~V`, `~T`, `~X1..5`) over the same port. "Use Current Printer Settings" sends nothing. This library sends the same commands or leaves them out in the same way.
+**For EZPL, yes. Every label-size and media setting of the Windows driver is a plain EZPL command.** The Seagull driver has no side channel. Its print module writes all settings into the same byte stream as the label, and its config module sends a few utility commands (`~S,SENSOR`, `^G`, `^XSET,MEMORY`, `~V`, `~T`, `~X1..5`) over the same port. "Use Current Printer Settings" sends nothing. This library sends the same commands or leaves them out in the same way, with one small difference: for an absolute stop position the driver sends `^E` twice (whole mm, then one decimal), and this library sends only the decimal form.
 
 These driver features are not in this library. They are all commands too, so you can send them with `bp730i raw`:
 
@@ -242,7 +242,7 @@ Settings that need a person, not a command: moving the media sensor, loading rib
 | `^GBw,h,t` | --inverse box | ZPL-PM FUN_180013730 | **unverified** |
 | `~DGR:name,total,bytesPerRow,HEX` | image store for --mode cut --cut-every n>1 / batch-cut | ZPL-PM FUN_180009210 (driver uses Z64 data, here hex) | **unverified** |
 | `^XGR:name,1,1` | recall stored image | ZPL-PM FUN_180009210 | **unverified** |
-| `^IDR:BP730I*.GRF` | delete stored images at job end | ZPL-PM FUN_180001a80 | **unverified** |
+| `^IDR:BP*.GRF` | delete stored images at job end | ZPL-PM FUN_180001a80 | **unverified** |
 | `~JC` | calibrate | ZPL-CM FUN_18000eb80 action 9 | **unverified** |
 | `~PH` | feed | ZPL-CM FUN_18000eb80 action 4 | **unverified** |
 | `~JA` | cancel | ZPL-CM FUN_18000eb80 action 0x1b | **unverified** |

@@ -30,6 +30,13 @@ const print = (...args: string[]) => bp("print", sample, "--pages", "1", "--size
 
 const STEPS: Step[] = [
   {
+    id: "before",
+    proves: "EZPL ~V (configuration label)",
+    run: () => bp("self-test"),
+    expect:
+      "A configuration label. Keep it: it lists your current ^S ^H ^E ^W ^Q ^D ^O ^A settings for the restore at the end.",
+  },
+  {
     id: "zpl-baseline",
     proves: "ZPL ^XA ^PW ^MT ^MN ^LL ^MM ~SD ^MD ^PR ^FO ^GFA ^PQ ^XZ",
     run: () =>
@@ -162,11 +169,12 @@ const STEPS: Step[] = [
     proves: "~S,ESZ ~S,ESA",
     run: async () => {
       await send(transport, new TextEncoder().encode(LANGUAGE_SWITCH.zpl));
-      await print("--lang", "ezpl");
+      await print("--lang", "zpl");
       await send(transport, new TextEncoder().encode(LANGUAGE_SWITCH.auto));
       await print("--lang", "ezpl");
     },
-    expect: "With ZPL forced the EZPL job does NOT print correctly. After auto it prints again.",
+    expect:
+      "Two correct labels (first ZPL, then EZPL). If the second one does not print, switch the printer off and on: that restores auto-detection.",
   },
   {
     id: "reset",
@@ -225,6 +233,11 @@ for (const step of STEPS) {
   report.push(`| ${step.id} | ${step.proves} | ${result} | ${[error, note.join(" ")].filter(Boolean).join("; ")} |`);
 }
 await send(transport, new TextEncoder().encode(LANGUAGE_SWITCH.auto));
+console.log(`
+The check changed stored EZPL settings (darkness, speed, stop position, cutter or peel mode).
+Restore your values from the first configuration label, for example:
+  bun src/cli.ts settings --size ${size} --gap 3 --method dt --darkness 8 --speed 4 --mode tear --stop 16 ${target.join(" ")}
+The example uses the GoLabel defaults for the BP730i (darkness 8, speed 4, stop position 16 mm).`);
 const path = `hardware-check-${new Date().toISOString().replace(/[:.]/g, "-")}.md`;
 await Bun.write(path, `${report.join("\n")}\n`);
 console.log(`\nWrote ${path}. Steps marked "as expected" can be set to hardware: "verified" in src/reference.ts.`);

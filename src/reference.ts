@@ -141,7 +141,7 @@ export const COMMANDS: readonly CommandRef[] = [
     "ZPL-PM FUN_180009210 (driver uses Z64 data, here hex)",
   ),
   zp("^XG", "^XGR:name,1,1", "recall stored image", "ZPL-PM FUN_180009210"),
-  zp("^ID", "^IDR:BP730I*.GRF", "delete stored images at job end", "ZPL-PM FUN_180001a80"),
+  zp("^ID", "^IDR:BP*.GRF", "delete stored images at job end", "ZPL-PM FUN_180001a80"),
   zp("~JC", "~JC", "calibrate", "ZPL-CM FUN_18000eb80 action 9"),
   zp("~PH", "~PH", "feed", "ZPL-CM FUN_18000eb80 action 4"),
   zp("~JA", "~JA", "cancel", "ZPL-CM FUN_18000eb80 action 0x1b"),

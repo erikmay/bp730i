@@ -53,7 +53,10 @@ export async function exchange(
   totalMs = 5000,
 ): Promise<Uint8Array> {
   const chunks: Uint8Array[] = [];
-  const { promise: closed, resolve: onClose, reject: onError } = Promise.withResolvers<void>();
+  const { promise: closed, resolve: onClose } = Promise.withResolvers<void>();
+  let failure: Error | undefined;
+  let isClosed = false;
+  let drained: (() => void) | undefined;
   let lastData = Date.now();
   const socket = await Bun.connect({
     hostname: t.host,
@@ -63,22 +66,41 @@ export async function exchange(
         chunks.push(new Uint8Array(chunk));
         lastData = Date.now();
       },
-      close: () => onClose(),
-      error: (_s, e) => onError(e),
-      connectError: (_s, e) => onError(e),
+      drain: () => drained?.(),
+      close: () => {
+        isClosed = true;
+        drained?.();
+        onClose();
+      },
+      error: (_s, e) => {
+        failure = e;
+      },
     },
   });
+  const deadline = Date.now() + Math.max(totalMs, 30_000 + data.length / 10);
   let offset = 0;
   while (offset < data.length) {
+    if (isClosed || failure)
+      throw new Error(`${t.host}:${t.port} closed the connection after ${offset} of ${data.length} bytes`, {
+        cause: failure,
+      });
+    if (Date.now() > deadline)
+      throw new Error(`${t.host}:${t.port} did not accept data in time (${offset} of ${data.length} bytes)`);
     const n = socket.write(data.subarray(offset));
-    offset += n;
-    if (n === 0) await Bun.sleep(5);
+    if (n > 0) offset += n;
+    else
+      await Promise.race([
+        new Promise<void>((r) => {
+          drained = r;
+        }),
+        Bun.sleep(1000),
+      ]);
   }
   socket.flush();
   if (quietMs > 0) {
     const start = Date.now();
     lastData = start;
-    while (Date.now() - start < totalMs && Date.now() - lastData < quietMs) await Bun.sleep(20);
+    while (!isClosed && Date.now() - start < totalMs && Date.now() - lastData < quietMs) await Bun.sleep(20);
   }
   socket.end();
   await Promise.race([closed, Bun.sleep(1000)]);

@@ -9,6 +9,8 @@ export const LIMITS = {
   widthMm: [4, 106],
   lengthMm: [3, 762],
   gapMm: [0, 30],
+  markOffsetMm: [-30, 30],
+  feedMm: [0, 100],
   darkness: [0, 19],
   speedIps: [2, 5],
   stopPositionMm: [-40, 40],
@@ -27,6 +29,8 @@ function check(errors: string[], name: keyof typeof LIMITS, value: number | unde
     );
 }
 
+export class SettingsError extends Error {}
+
 /** Throws one error that lists every out-of-range setting. */
 export function validateSettings(s: PrintSettings, copies = 1): void {
   const errors: string[] = [];
@@ -39,7 +43,11 @@ export function validateSettings(s: PrintSettings, copies = 1): void {
   check(errors, "homeYMm", s.homeYMm);
   check(errors, "copies", copies, true);
   if (s.sensing?.kind === "gap") check(errors, "gapMm", s.sensing.gapMm);
-  if (s.sensing?.kind === "black-mark") check(errors, "gapMm", s.sensing.markMm);
+  if (s.sensing?.kind === "black-mark") {
+    check(errors, "gapMm", s.sensing.markMm);
+    check(errors, "markOffsetMm", s.sensing.offsetMm);
+  }
+  if (s.sensing?.kind === "continuous") check(errors, "feedMm", s.sensing.feedMm);
   if (s.postPrint?.kind === "cut") check(errors, "cutEvery", s.postPrint.every, true);
-  if (errors.length > 0) throw new Error(`Invalid settings:\n  ${errors.join("\n  ")}`);
+  if (errors.length > 0) throw new SettingsError(`Invalid settings:\n  ${errors.join("\n  ")}`);
 }

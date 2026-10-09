@@ -114,6 +114,7 @@ export function parsePgmStream(buf: Uint8Array): GrayImage[] {
     const maxval = Number(token());
     if (maxval !== 255) throw new Error(`Unsupported PGM maxval ${maxval}`);
     pos++;
+    if (pos + width * height > buf.length) throw new Error("Truncated PGM data from pdftoppm");
     pages.push({ width, height, data: buf.slice(pos, pos + width * height) });
     pos += width * height;
   }

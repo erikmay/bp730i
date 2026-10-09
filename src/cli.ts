@@ -33,6 +33,7 @@ import { describeReply } from "./lang/replies.ts";
 import { encodeText } from "./lang/types.ts";
 import { bitmapToPng } from "./preview.ts";
 import { describe, MACOS_GENERIC_PPD } from "./transport.ts";
+import { SettingsError } from "./validate.ts";
 
 const HELP = `bp730i: driverless printing for the Labelident BP730i (Godex RT730i)
 
@@ -53,7 +54,7 @@ Label and media (mm):
   --mark MM             Black-mark media with this mark width
   --mark-offset MM      Mark to top-of-form distance; negative = inside the mark
                         (write negative values as --mark-offset=-2)
-  --continuous [MM]     Continuous media, optional extra feed in mm
+  --continuous MM       Continuous media with this extra feed after each label (0 for none)
   --sensor TYPE         reflective | see-through | auto (EZPL only)
   --method TYPE         dt (direct thermal) | tt (thermal transfer)
   --darkness N          0..19 (Godex scale)
@@ -70,7 +71,7 @@ Image:
   --scale MODE          fit | fill | none (default fit)
   --rotate DEG          0 | 90 | 180 | 270
   --dither MODE         threshold | floyd-steinberg | ordered (default threshold)
-  --threshold N         0..255, gray level that prints black below it (default 128)
+  --threshold N         1..255, gray level that prints black below it (default 128)
   --offset-x MM, --offset-y MM   Move the image on the label
   --dpi N               PDF render resolution (default 300)
   --copies N            Copies of each page (default 1)
@@ -138,6 +139,13 @@ function number(v: Values, key: keyof Values): number | undefined {
   return n;
 }
 
+function numberIn(v: Values, key: keyof Values, min: number, max: number): number | undefined {
+  const n = number(v, key);
+  if (n !== undefined && (n < min || n > max))
+    throw new UsageError(`--${key} must be between ${min} and ${max}, got ${n}`);
+  return n;
+}
+
 function oneOf<T extends string>(v: Values, key: keyof Values, allowed: readonly T[]): T | undefined {
   const raw = v[key];
   if (raw === undefined || typeof raw === "boolean") return undefined;
@@ -155,6 +163,7 @@ function parseSize(raw: string): { widthMm: number; lengthMm: number } {
 function parseSensing(v: Values): MediaSensing | undefined {
   const given = [v.gap, v.mark, v.continuous].filter((x) => x !== undefined).length;
   if (given > 1) throw new UsageError("Use only one of --gap, --mark, --continuous");
+  if (v["mark-offset"] !== undefined && v.mark === undefined) throw new UsageError("--mark-offset needs --mark");
   if (v.mark !== undefined)
     return { kind: "black-mark", markMm: number(v, "mark") ?? 0, offsetMm: number(v, "mark-offset") ?? 0 };
   if (v.continuous !== undefined) return { kind: "continuous", feedMm: number(v, "continuous") ?? 0 };
@@ -207,7 +216,7 @@ function parseImage(v: Values): ImageOptions {
     scale: oneOf(v, "scale", ["fit", "fill", "none"] as const) ?? DEFAULT_IMAGE_OPTIONS.scale,
     rotate: ROTATIONS[oneOf(v, "rotate", ["0", "90", "180", "270"] as const) ?? "0"],
     dither: oneOf<Dither>(v, "dither", ["threshold", "floyd-steinberg", "ordered"]) ?? DEFAULT_IMAGE_OPTIONS.dither,
-    threshold: number(v, "threshold") ?? DEFAULT_IMAGE_OPTIONS.threshold,
+    threshold: numberIn(v, "threshold", 1, 255) ?? DEFAULT_IMAGE_OPTIONS.threshold,
     offsetXDots: mmToDots(number(v, "offset-x") ?? 0),
     offsetYDots: mmToDots(number(v, "offset-y") ?? 0),
   } satisfies ImageOptions;
@@ -216,7 +225,8 @@ function parseImage(v: Values): ImageOptions {
 function transportFor(v: Values, defaultFile: string): Transport {
   if (v.output !== undefined) return { kind: "file", path: v.output };
   if (v["dry-run"]) return { kind: "file", path: defaultFile };
-  if (v.host !== undefined) return { kind: "tcp", host: v.host, port: number(v, "port") ?? DEFAULT_TCP_PORT };
+  if (v.host !== undefined)
+    return { kind: "tcp", host: v.host, port: numberIn(v, "port", 1, 65535) ?? DEFAULT_TCP_PORT };
   return { kind: "cups", queue: v.queue ?? DEFAULT_QUEUE };
 }
 
@@ -264,7 +274,10 @@ async function main(argv: string[]): Promise<void> {
         file,
         { widthMm: settings.widthMm, lengthMm: settings.lengthMm },
         parseImage(v),
-        { dpi: number(v, "dpi") ?? 300, ...(v.pages === undefined ? {} : { pages: parsePageRange(v.pages) }) },
+        {
+          dpi: numberIn(v, "dpi", 72, 1200) ?? 300,
+          ...(v.pages === undefined ? {} : { pages: parsePageRange(v.pages) }),
+        },
       );
       const data = encodeJob(lang, { settings, pages, copies });
       const stem = basename(file).replace(/\.[^.]+$/, "");
@@ -276,7 +289,12 @@ async function main(argv: string[]): Promise<void> {
       const settings = parseSettings(v);
       if (Object.keys(settings).length === 0) throw new UsageError("settings needs at least one setting flag");
       warnUnsupported(lang, settings);
-      await deliver(transportFor(v, `settings.${lang}`), encodeSettings(lang, settings, v.save ?? false), "settings");
+      const data = encodeSettings(lang, settings, v.save ?? false);
+      if (data.length === 0)
+        throw new UsageError(
+          "Nothing to send. --gap, --mark and --continuous need --size; --mirror and --inverse apply only to print.",
+        );
+      await deliver(transportFor(v, `settings.${lang}`), data, "settings");
       return;
     }
     case "calibrate":
@@ -301,7 +319,7 @@ async function main(argv: string[]): Promise<void> {
       const query: Query = command;
       if (v.host === undefined)
         throw new UsageError(`${query} needs --host: answers only come back over TCP. CUPS (USB) is one-way.`);
-      const t = { kind: "tcp", host: v.host, port: number(v, "port") ?? DEFAULT_TCP_PORT } as const;
+      const t = { kind: "tcp", host: v.host, port: numberIn(v, "port", 1, 65535) ?? DEFAULT_TCP_PORT } as const;
       const reply = await exchange(t, encodeText(dialect.queries[query]), 1500);
       const text = new TextDecoder("latin1").decode(reply);
       if (text.length === 0) console.error("No answer within the timeout.");
@@ -350,5 +368,9 @@ try {
 } catch (e) {
   const message = e instanceof Error ? e.message : String(e);
   console.error(`bp730i: ${message}`);
-  process.exit(e instanceof UsageError || (e as { code?: string }).code?.startsWith("ERR_PARSE_ARGS") ? 2 : 1);
+  process.exit(
+    e instanceof UsageError || e instanceof SettingsError || (e as { code?: string }).code?.startsWith("ERR_PARSE_ARGS")
+      ? 2
+      : 1,
+  );
 }

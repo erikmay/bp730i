@@ -5,7 +5,9 @@ import { type Dialect, encodeText, type Job } from "./types.ts";
 
 const CRLF = "\r\n";
 
-const mmOneDecimal = (mm: number): string => mm.toFixed(1);
+/** Rounds half away from zero on whole micrometres, like the driver (Measurement::MM10 via MulDiv). */
+const mmOneDecimal = (mm: number): string =>
+  (Math.sign(mm) * (Math.round(Math.round(Math.abs(mm) * 1000) / 100) / 10)).toFixed(1);
 
 function persistentConfigLines(s: PrintSettings): string[] {
   const out: string[] = [];
