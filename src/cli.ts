@@ -32,6 +32,7 @@ import { LANGUAGE_SWITCH } from "./lang/ezpl.ts";
 import { describeReply } from "./lang/replies.ts";
 import { encodeText } from "./lang/types.ts";
 import { bitmapToPng } from "./preview.ts";
+import type { Bitmap } from "./raster.ts";
 import { describe, MACOS_GENERIC_PPD } from "./transport.ts";
 import { SettingsError } from "./validate.ts";
 
@@ -149,9 +150,9 @@ function numberIn(v: Values, key: keyof Values, min: number, max: number): numbe
 function oneOf<T extends string>(v: Values, key: keyof Values, allowed: readonly T[]): T | undefined {
   const raw = v[key];
   if (raw === undefined || typeof raw === "boolean") return undefined;
-  if (!(allowed as readonly string[]).includes(raw))
-    throw new UsageError(`--${key} must be one of ${allowed.join(", ")}, got "${raw}"`);
-  return raw as T;
+  const match = allowed.find((a) => a === raw);
+  if (match === undefined) throw new UsageError(`--${key} must be one of ${allowed.join(", ")}, got "${raw}"`);
+  return match;
 }
 
 function parseSize(raw: string): { widthMm: number; lengthMm: number } {
@@ -241,7 +242,7 @@ async function deliver(t: Transport, data: Uint8Array, title: string): Promise<v
   if (!(t.kind === "file" && t.path === "-")) console.error(`Sent ${data.length} bytes to ${describe(t)}`);
 }
 
-async function writePreviews(dir: string, stem: string, bitmaps: readonly import("./raster.ts").Bitmap[]) {
+async function writePreviews(dir: string, stem: string, bitmaps: readonly Bitmap[]) {
   await mkdir(dir, { recursive: true });
   for (const [i, bmp] of bitmaps.entries()) {
     const path = join(dir, `${stem}-${i + 1}.png`);
@@ -369,7 +370,9 @@ try {
   const message = e instanceof Error ? e.message : String(e);
   console.error(`bp730i: ${message}`);
   process.exit(
-    e instanceof UsageError || e instanceof SettingsError || (e as { code?: string }).code?.startsWith("ERR_PARSE_ARGS")
+    e instanceof UsageError ||
+      e instanceof SettingsError ||
+      (e instanceof Error && "code" in e && String(e.code).startsWith("ERR_PARSE_ARGS"))
       ? 2
       : 1,
   );
