@@ -3,7 +3,7 @@ import { loadPages, type PageRange } from "./render.ts";
 import { MAX_PRINT_WIDTH_DOTS, mmToDots } from "./units.ts";
 
 export type { Control, Job, Query } from "./ezpl.ts";
-export { CONTROLS, decodeGraphics, describeReply, encodeJob, encodeSettings, QUERIES } from "./ezpl.ts";
+export { CONTROLS, decodeGraphics, describeReply, encodeJob, encodeSettings, encodeText, QUERIES } from "./ezpl.ts";
 export type { Bitmap, Dither, GrayImage, RasterOptions, Rotation, ScaleMode } from "./raster.ts";
 export { rasterize } from "./raster.ts";
 export type { PageRange } from "./render.ts";

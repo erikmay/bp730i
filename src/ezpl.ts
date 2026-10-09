@@ -73,7 +73,7 @@ function formatLines(s: PrintSettings): string[] {
   if (s.widthMm !== undefined) out.push(`^W${Math.round(s.widthMm)}`);
   if (s.homeYMm !== undefined) {
     const dots = mmToDots(s.homeYMm);
-    out.push(`~Q${dots > 0 ? "+" : ""}${dots}`);
+    out.push(`~Q${dots >= 0 ? "+" : ""}${dots}`);
   }
   if (s.stopPositionMm !== undefined) out.push(`^E${mmOneDecimal(s.stopPositionMm)}`);
   return out;
@@ -119,7 +119,7 @@ export function decodeGraphics(data: Uint8Array): Bitmap[] {
 }
 
 /** ~S,CHECK / ~S,STATUS codes. Source: EZPL Programmer's Manual Rev. O.4 p.80; the driver maps the same codes. */
-export const STATUS_CODES: Readonly<Record<string, string>> = {
+const STATUS_CODES: Readonly<Record<string, string>> = {
   "00": "Ready",
   "01": "Media empty or media jam",
   "02": "Media jam",

@@ -22,20 +22,27 @@ async function bp(...args: string[]): Promise<void> {
 }
 const print = (...args: string[]) => bp("print", sample, "--pages", "1", ...args);
 
-/** Values from the configuration label of this printer (^E16 ^R000 ~Q+0, Option: ^D0 ^O0 ^AD). */
-const RESTORE = ["--stop", "16", "--home-x", "0", "--home-y", "0"];
+/** Values from the configuration label of this printer (^E16 ^R000 ~Q+0, sensor "See."). */
+const RESTORE = ["--stop", "16", "--home-x", "0", "--home-y", "0", "--sensor", "see-through"];
 
 const STEPS: Step[] = [
   {
     id: "stored-settings",
-    proves: "^AD ^O0 ^D0 ^G1 ^R ~Q ^E are stored",
+    proves: "^G2 ^R ~Q ^E are stored",
     run: async () => {
-      await bp("settings", "--method", "dt", "--mode", "tear", "--sensor", "see-through");
-      await bp("settings", "--stop", "15", "--home-x", "2", "--home-y", "3");
+      await bp("settings", "--sensor", "auto", "--stop", "15", "--home-x", "2", "--home-y", "3");
       await bp("self-test");
     },
-    expect:
-      "A configuration label with ^E15, ^R024, ~Q+35, Option: ^D0 ^O0 ^AD, and the sensor line still 'See.' (see-through).",
+    expect: "A configuration label with ^E15, ^R024, ~Q+35, and a sensor line that no longer starts with 'See.'.",
+  },
+  {
+    id: "sensor-see-through",
+    proves: "^G1 = see-through",
+    run: async () => {
+      await bp("settings", "--sensor", "see-through");
+      await bp("self-test");
+    },
+    expect: "A configuration label whose sensor line starts with 'See.' again.",
   },
   {
     id: "stop-position",
@@ -105,6 +112,7 @@ if (values.host) {
 }
 
 if (!(await Bun.file(sample).exists())) await Bun.$`bun scripts/make-sample-pdf.ts ${sample}`;
+const reportPath = `hardware-check-${new Date().toISOString().replace(/[:.]/g, "-")}.md`;
 const report: string[] = [
   `# BP730i hardware check ${new Date().toISOString()}`,
   "",
@@ -117,22 +125,39 @@ console.log(`The printer locks its command language at the first job after power
 Switch the printer off and on now, so that this check sends the first job (EZPL).`);
 prompt("Press Enter when the display shows ready.");
 console.log("\nAnswer y (as expected), n (not as expected), s (skip). Add a note after a space: n shifted 2 mm\n");
-for (const step of STEPS) {
-  console.log(`\n== ${step.id}\nExpect: ${step.expect}`);
-  let error = "";
-  try {
-    await step.run();
-  } catch (e) {
-    error = e instanceof Error ? e.message : String(e);
-    console.log(`Error: ${error}`);
-  }
-  const answer = (prompt("Result [y/n/s] + note:") ?? "s").trim();
-  const [first = "s", ...note] = answer.split(" ");
-  const result = { y: "as expected", n: "NOT as expected" }[first.toLowerCase()] ?? "skipped";
-  report.push(`| ${step.id} | ${step.proves} | ${result} | ${[error, note.join(" ")].filter(Boolean).join("; ")} |`);
+const saveReport = () => Bun.write(reportPath, `${report.join("\n")}\n`);
+let restored = false;
+async function restore(): Promise<void> {
+  if (restored) return;
+  restored = true;
+  console.log(`\nRestoring this printer's values: settings ${RESTORE.join(" ")}`);
+  await bp("settings", ...RESTORE);
+  await bp("self-test");
+  console.log("Check the configuration label: ^E16, ^R000, ~Q+0 and the sensor line 'See.'.");
 }
-console.log(`\nRestoring stop position and home position: settings ${RESTORE.join(" ")}`);
-await bp("settings", ...RESTORE);
-const path = `hardware-check-${new Date().toISOString().replace(/[:.]/g, "-")}.md`;
-await Bun.write(path, `${report.join("\n")}\n`);
-console.log(`\nWrote ${path}. Steps marked "as expected" can be set to verified in src/reference.ts.`);
+process.on("SIGINT", async () => {
+  await restore();
+  process.exit(130);
+});
+
+try {
+  for (const step of STEPS) {
+    console.log(`\n== ${step.id}\nExpect: ${step.expect}`);
+    let error = "";
+    try {
+      await step.run();
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+      console.log(`Error: ${error}`);
+    }
+    const answer = (prompt("Result [y/n/s] + note:") ?? "s").trim();
+    const [first = "s", ...note] = answer.split(" ");
+    const result = { y: "as expected", n: "NOT as expected" }[first.toLowerCase()] ?? "skipped";
+    report.push(`| ${step.id} | ${step.proves} | ${result} | ${[error, note.join(" ")].filter(Boolean).join("; ")} |`);
+    await saveReport();
+  }
+} finally {
+  await saveReport();
+  await restore();
+}
+console.log(`\nWrote ${reportPath}. Steps marked "as expected" can be set to verified in src/reference.ts.`);

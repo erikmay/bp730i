@@ -81,12 +81,12 @@ Label and media options (all lengths in mm):
 | `--speed N` | 2..5 inch/s | `^S` |
 | `--mode MODE` | `tear`, `peel`, `cut`, `batch-cut` | `^O`, `^D` |
 | `--cut-every N` | with `--mode cut` | `^Dn` |
-| `--stop MM` | -40..40, stop position after print | `^E` |
-| `--home-x MM` | 0..33.7 (399 dots), printer left margin | `^R` (dots) |
-| `--home-y MM` | -8.4..8.4 (±100 dots), printer vertical offset | `~Q` (dots) |
+| `--stop MM` | 0..40, stop position after print | `^E` |
+| `--home-x MM` | 0..33.78 (399 dots), printer left margin | `^R` (dots) |
+| `--home-y MM` | -8.47..8.47 (±100 dots), printer vertical offset | `~Q` (dots) |
 | `--mirror`, `--inverse` | whole label | `^LM`, `^LI` |
 
-A setting you leave out produces no command. The printer then keeps its stored value, like "Use Current Printer Settings" in the Windows driver. The printer stores every EZPL setting permanently. In EZPL the label length and the media type are one command (`^Q`), so `--size` without `--mark` or `--continuous` also sets gap media with a 2 mm gap. The library itself sends `^Q` only when the settings name a media type.
+A setting you leave out produces no command. The printer then keeps its stored value, like "Use Current Printer Settings" in the Windows driver. The printer stores every setting except `--mirror` and `--inverse` permanently. In EZPL the label length and the media type are one command (`^Q`), so `--size` without `--mark` or `--continuous` also sets gap media with a 2 mm gap. The library itself sends `^Q` only when the settings name a media type.
 
 This printer's configuration label shows `^S5 ^H8 ^E16`, `^W100 ^Q150,2`, `^R000 ~Q+0`, `^D0 ^O0 ^AD` and a see-through sensor. Labelident's support PDF gives useful stop positions: 12..16 mm for tearing and 28..30 mm with a cutter. Use the `=` form for negative values: `--home-y=-2`.
 
@@ -146,7 +146,7 @@ bun scripts/hardware-check.ts                         # over CUPS
 bun scripts/hardware-check.ts --host 192.168.1.50     # over TCP, adds the query steps
 ```
 
-The script covers only the commands that are still unverified, in 7 steps (10 with `--host`), and uses about 15 labels. It first asks you to switch the printer off and on, so that its EZPL job is the first job after power-on (see [Language lock](#language-lock)). The first step stores test values and prints a configuration label that must show them. At the end the script restores this printer's stop position and home position (`--stop 16 --home-x 0 --home-y 0`). Each step says what you should see, then asks `y`, `n` or `s` (skip) and an optional note. It writes the answers to `hardware-check-<time>.md`.
+The script covers only the commands that are still unverified, in 8 steps (11 with `--host`), and uses about 18 labels. It first asks you to switch the printer off and on, so that its EZPL job is the first job after power-on (see [Language lock](#language-lock)). The first two steps store test values and print configuration labels that must show them. At the end, also after an error or Ctrl-C, the script restores this printer's values (`--stop 16 --home-x 0 --home-y 0 --sensor see-through`) and prints a configuration label to confirm them. It saves the answers after each step. Each step says what you should see, then asks `y`, `n` or `s` (skip) and an optional note. The answers go to `hardware-check-<time>.md`.
 
 For each step marked "as expected", set the command to verified in `src/reference.ts`, then run `bun run docs:commands` to update the table below.
 
@@ -206,7 +206,7 @@ These are the main findings. The details are in [docs/reverse-engineering](docs/
 - **Model limits come from `Model.d [Godex_RT730i]`.** They are 300 dpi, printable width 105.7 mm, speeds 2..5 in/s, darkness default 8, cutter and stripper supported. GoLabel's `PrinterModel.xml` adds darkness 0..19, width 4..106 mm and length 3..762 mm.
 - **EZPL images are raw bitmaps.** The driver and GoLabel send `Qx,y,bytesPerRow,rows`, then raw rows with 1 as a black dot and the most significant bit on the left. The driver ends the header with CR and GoLabel with LF. This library uses CR, as the manual's general rule says. The driver skips blank 8-row bands and pads the last band to a multiple of 8 rows. That is a side effect of its band splitter, not a firmware rule: GoLabel does not pad, and the exact height printed correctly. This library sends the full page with the exact height.
 - **The GoLabel download URL in the task returns HTTP 403.** The current GoLabel link on the [BP730 product page](https://www.labelident.com/bp730.html) works (SHA-256 `a08d5b39…4c067`). GoLabel II 2.1.9558 is a .NET program. ILSpy decompiles it to C#.
-- **The sources disagree on `^G`.** The EZPL manual gives `^G0`/`^G1` opposite meanings on two pages. The hardware check settles it through the configuration label.
+- **The sources disagree on `^G`.** The EZPL manual gives `^G0`/`^G1` opposite meanings on two pages. The hardware check settles `^G1` through the configuration label.
 - **Neither the driver nor GoLabel handles the language lock.** No module sends a language switch, and no command brings a ZPL-locked printer back to EZPL. Only a power cycle does.
 
 To repeat the extraction, run `bun tools/re/fetch-and-unpack.ts [dir] [--ghidra] [--ilspy]`. It downloads the driver, GoLabel, the EZPL manual and the RT730i manual, checks their SHA-256 and unpacks them. With `--ghidra` it decompiles the four driver modules with Ghidra headless (`GHIDRA_HOME` must be set). With `--ilspy` it decompiles the GoLabel assemblies (`ILSPYCMD` or `ilspycmd` on the PATH). The Ghidra scripts and the helper scripts that the analysis used are in `tools/re/`.

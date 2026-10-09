@@ -13,11 +13,13 @@ import {
   describeReply,
   encodeJob,
   encodeSettings,
+  encodeText,
   exchange,
   type ImageOptions,
   type LabelSize,
   type MediaSensing,
   mmToDots,
+  type PageRange,
   type PostPrint,
   type PrintSettings,
   parsePageRange,
@@ -28,6 +30,7 @@ import {
   SettingsError,
   send,
   type Transport,
+  validateSettings,
 } from "./index.ts";
 import { bitmapToPng } from "./preview.ts";
 import type { Bitmap } from "./raster.ts";
@@ -63,7 +66,7 @@ Label and media (mm):
   --speed N             2..5 inches per second
   --mode MODE           tear | peel | cut | batch-cut
   --cut-every N         With --mode cut: cut after every N labels (default 1)
-  --stop MM             Stop position after print, -40..40 (tear 12-16, cutter 28-30)
+  --stop MM             Stop position after print, 0..40 (tear 12-16, cutter 28-30)
   --home-x MM           Printer left margin (^R)
   --home-y MM           Printer vertical offset (~Q)
   --mirror, --inverse   Mirror or invert the whole label
@@ -180,6 +183,14 @@ function parsePostPrint(v: Values): PostPrint | undefined {
   }
 }
 
+function pageRangeOption(raw: string): PageRange {
+  try {
+    return parsePageRange(raw);
+  } catch (e) {
+    throw new UsageError(e instanceof Error ? e.message : String(e));
+  }
+}
+
 /** A label size without a media flag means gap media with the default gap. */
 function parseSettings(v: Values, size: LabelSize | undefined): PrintSettings {
   const s: { -readonly [K in keyof PrintSettings]?: PrintSettings[K] } = {};
@@ -254,6 +265,7 @@ async function main(argv: string[]): Promise<void> {
     console.log(HELP);
     return;
   }
+  if (args.length > 1) throw new UsageError(`Unexpected arguments: ${args.slice(1).join(" ")}`);
 
   switch (command) {
     case "print": {
@@ -262,7 +274,8 @@ async function main(argv: string[]): Promise<void> {
       const size = v.size === undefined ? DEFAULT_SIZE : parseSize(v.size);
       const settings = parseSettings(v, size);
       const copies = number(v, "copies") ?? 1;
-      const pageRange = v.pages === undefined ? undefined : parsePageRange(v.pages);
+      validateSettings(settings, copies);
+      const pageRange = v.pages === undefined ? undefined : pageRangeOption(v.pages);
       const pages = await renderLabels(file, size, parseImage(v), pageRange);
       const data = encodeJob({ settings, pages, copies });
       const stem = basename(file).replace(/\.[^.]+$/, "");
@@ -271,13 +284,12 @@ async function main(argv: string[]): Promise<void> {
       return;
     }
     case "settings": {
+      if (v.size === undefined && (v.gap ?? v.mark ?? v.continuous) !== undefined)
+        throw new UsageError("--gap, --mark and --continuous need --size");
+      if (v.mirror || v.inverse) throw new UsageError("--mirror and --inverse apply only to print");
       const settings = parseSettings(v, v.size === undefined ? undefined : parseSize(v.size));
       if (Object.keys(settings).length === 0) throw new UsageError("settings needs at least one setting flag");
       const data = encodeSettings(settings);
-      if (data.length === 0)
-        throw new UsageError(
-          "Nothing to send. --gap, --mark and --continuous need --size; --mirror and --inverse apply only to print.",
-        );
       await deliver(transportFor(v, "settings.ezpl"), data, "settings");
       return;
     }
@@ -286,7 +298,7 @@ async function main(argv: string[]): Promise<void> {
     case "cancel":
     case "self-test": {
       const control: Control = command;
-      await deliver(transportFor(v, `${control}.ezpl`), new TextEncoder().encode(CONTROLS[control]), control);
+      await deliver(transportFor(v, `${control}.ezpl`), encodeText(CONTROLS[control]), control);
       return;
     }
     case "status":
@@ -295,7 +307,8 @@ async function main(argv: string[]): Promise<void> {
       const query: Query = command;
       if (v.host === undefined)
         throw new UsageError(`${query} needs --host: answers only come back over TCP. CUPS (USB) is one-way.`);
-      const reply = await exchange(tcpTarget(v, v.host), new TextEncoder().encode(QUERIES[query]), 1500);
+      if (v.output !== undefined || v["dry-run"]) throw new UsageError(`${query} cannot write to a file`);
+      const reply = await exchange(tcpTarget(v, v.host), encodeText(QUERIES[query]), 1500);
       const text = new TextDecoder("latin1").decode(reply);
       if (text.length === 0) console.error("No answer within the timeout.");
       else console.log(describeReply(query, text));
