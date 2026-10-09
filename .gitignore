@@ -1,0 +1,4 @@
+*.pbm
+*.zpl
+*.pdf
+node_modules/
