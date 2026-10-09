@@ -17,7 +17,7 @@ const cmd = (token: string, syntax: string, use: string, source: string, verifie
 const VERIFIED = true;
 
 export const COMMANDS: readonly CommandRef[] = [
-  cmd("^AD", "^AD / ^AT", "--method dt / tt", "GDX-PM FUN_18000c280; GL Setup.cs:396; EZPL m.19"),
+  cmd("^AD", "^AD", "--method dt", "GDX-PM FUN_18000c280; GL Setup.cs:396; EZPL m.19"),
   cmd("^AT", "^AT", "--method tt", "GDX-PM FUN_18000c280; GL Setup.cs:396"),
   cmd(
     "^O",
