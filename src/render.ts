@@ -44,8 +44,7 @@ function sniff(b: Uint8Array): "pdf" | "png" | "jpeg" {
   throw new Error("Unsupported input. Use PDF, PNG or JPEG.");
 }
 
-/** Mixes RGBA onto white, then converts to luminance. */
-function rgbaToGray(width: number, height: number, rgba: Uint8Array): GrayImage {
+function flattenOnWhiteToGray(width: number, height: number, rgba: Uint8Array): GrayImage {
   const data = new Uint8Array(width * height);
   for (let i = 0; i < data.length; i++) {
     const r = rgba[i * 4]!;
@@ -60,12 +59,12 @@ function rgbaToGray(width: number, height: number, rgba: Uint8Array): GrayImage 
 
 function decodePng(bytes: Uint8Array): GrayImage {
   const png = PNG.sync.read(Buffer.from(bytes));
-  return rgbaToGray(png.width, png.height, png.data);
+  return flattenOnWhiteToGray(png.width, png.height, png.data);
 }
 
 function decodeJpeg(bytes: Uint8Array): GrayImage {
   const img = jpeg.decode(bytes, { useTArray: true, formatAsRGBA: true, maxMemoryUsageInMB: 1024 });
-  return rgbaToGray(img.width, img.height, img.data);
+  return flattenOnWhiteToGray(img.width, img.height, img.data);
 }
 
 async function renderPdf(path: string, opts: RenderOptions): Promise<GrayImage[]> {
@@ -92,7 +91,6 @@ async function renderPdf(path: string, opts: RenderOptions): Promise<GrayImage[]
   return pages;
 }
 
-/** Parses one or more concatenated binary PGM (P5, maxval 255) images. pdftoppm writes this to stdout. */
 export function parsePgmStream(buf: Uint8Array): GrayImage[] {
   const pages: GrayImage[] = [];
   let pos = 0;

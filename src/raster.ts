@@ -55,7 +55,6 @@ export function rotate(img: GrayImage, deg: Rotation): GrayImage {
   return { width: ow, height: swap ? w : h, data: out };
 }
 
-/** Box-filter resample. Averages every source pixel a target pixel covers, so downscaling keeps thin lines. */
 export function resize(img: GrayImage, width: number, height: number): GrayImage {
   if (width === img.width && height === img.height) return img;
   const sx = img.width / width;
@@ -78,7 +77,6 @@ export function resize(img: GrayImage, width: number, height: number): GrayImage
   return { width, height, data: out };
 }
 
-/** Scales the image into a white canvas of the label size, centered, then shifted by the offsets. */
 export function layout(img: GrayImage, opts: RasterOptions): GrayImage {
   const { widthDots: W, heightDots: H } = opts;
   let scaled = img;
@@ -156,7 +154,6 @@ export function rasterize(img: GrayImage, opts: RasterOptions): Bitmap {
   return toBitmap(layout(rotate(img, opts.rotate), opts), opts.dither, opts.threshold);
 }
 
-/** Converts a bitmap back to grayscale, for previews and round-trip checks. */
 export function bitmapToGray(bmp: Bitmap): GrayImage {
   const out = new Uint8Array(bmp.width * bmp.height);
   for (let y = 0; y < bmp.height; y++)

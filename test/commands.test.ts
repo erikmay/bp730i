@@ -8,11 +8,14 @@ const blank = (width: number, height: number): Bitmap => {
   return { width, height, bytesPerRow, data: new Uint8Array(bytesPerRow * height) };
 };
 
+/** "^Db" must not count as "^D": a lowercase letter after the token makes it a different command. */
+const startsWithWholeToken = (piece: string, token: string) =>
+  piece.startsWith(token) && !/^[a-z]/.test(piece.slice(token.length));
+
 const latin1 = (b: Uint8Array) => new TextDecoder("latin1").decode(b);
 
 describe("EZPL", () => {
   test("matches the Windows driver's command sequence for a 100 x 150 mm tear-off job", () => {
-    // Expected text from the decompiled driver (notes: sample job), with the raster removed.
     const settings: PrintSettings = {
       widthMm: 100,
       lengthMm: 150,
@@ -98,9 +101,7 @@ describe.each(["ezpl", "zpl"] as const)("%s output", (language: Language) => {
       language === "zpl"
         ? text.split(/(?=[\^~])/).map((p) => p.trim())
         : text.split(/[\r\n]+/).filter((l) => l !== "" && !/^\0+$/.test(l));
-    // A token matches when the piece starts with it and no lowercase letter follows (so ^Db is not ^D).
-    const known = (p: string) => tokens.some((t) => p.startsWith(t) && !/^[a-z]/.test(p.slice(t.length)));
-    const unknown = pieces.filter((p) => p !== "" && !known(p));
+    const unknown = pieces.filter((p) => p !== "" && !tokens.some((t) => startsWithWholeToken(p, t)));
     expect(unknown).toEqual([]);
   });
 

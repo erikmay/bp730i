@@ -1,7 +1,3 @@
-// Interactive hardware check for the BP730i. Run it on the Mac with the printer connected:
-//   bun scripts/hardware-check.ts [--size 100x150] [--queue BP730i_RAW] [--host 192.168.x.y]
-// Each step sends a job, then asks what you saw. Answers go to hardware-check-<time>.md.
-// It prints only the synthetic sample label. It uses about 25 labels.
 import { parseArgs } from "node:util";
 import { DEFAULT_QUEUE, DEFAULT_TCP_PORT, DIALECTS, exchange, send, type Transport } from "../src/index.ts";
 import { LANGUAGE_SWITCH } from "../src/lang/ezpl.ts";
@@ -20,7 +16,6 @@ const target = values.host ? ["--host", values.host] : ["--queue", values.queue 
 
 interface Step {
   readonly id: string;
-  /** Command tokens (as in src/reference.ts) this step proves when the answer is yes. */
   readonly proves: string;
   readonly run: () => Promise<void>;
   readonly expect: string;

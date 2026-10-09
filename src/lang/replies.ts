@@ -23,7 +23,6 @@ export const EZPL_STATUS: Readonly<Record<string, string>> = {
   "62": "Print head overheat",
 };
 
-/** Adds a readable line to a printer answer where the format is known. Unknown answers pass through. */
 export function describeReply(language: Language, query: Query, reply: string): string {
   const text = reply.trim();
   if (language === "ezpl" && query === "status") {

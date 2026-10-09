@@ -1,5 +1,3 @@
-// Renders src/reference.ts into README.md between the command-table markers.
-// Usage: bun scripts/gen-command-table.ts [--check]   (--check fails when README.md is out of date)
 import { COMMANDS } from "../src/reference.ts";
 
 const START = "<!-- command-table:start -->";

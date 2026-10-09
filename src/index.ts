@@ -20,7 +20,6 @@ export { LIMITS, validateSettings } from "./validate.ts";
 
 export const DIALECTS: Readonly<Record<Language, Dialect>> = { ezpl, zpl };
 
-/** EZPL is the printer's native language and the one the Windows driver uses for the "BP730i" queue. */
 export const DEFAULT_LANGUAGE: Language = "ezpl";
 
 export type ImageOptions = Omit<RasterOptions, "widthDots" | "heightDots">;

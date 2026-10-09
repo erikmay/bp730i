@@ -1,4 +1,3 @@
-/** The BP730i prints at 300 dpi (11.81 dots per mm). */
 export const DPI = 300;
 export const DOTS_PER_MM = DPI / 25.4;
 /** Print head width: 105.7 mm (driver data file Model.d [Godex_RT730i] Stock.Printable.X). */

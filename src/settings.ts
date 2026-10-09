@@ -1,7 +1,3 @@
-/**
- * Printer-independent media and print settings. Every field is optional:
- * a missing field means "send no command, keep what the printer has stored".
- */
 export type MediaSensing =
   | { readonly kind: "gap"; readonly gapMm: number }
   /** `offsetMm` is the distance from the mark to the top of form. Negative means inside the mark. */
@@ -21,6 +17,10 @@ export type PostPrint =
 
 export type SensorType = "reflective" | "see-through" | "auto";
 
+/**
+ * Printer-independent media and print settings. Every field is optional:
+ * a missing field means "send no command, keep what the printer has stored".
+ */
 export interface PrintSettings {
   readonly widthMm?: number;
   readonly lengthMm?: number;

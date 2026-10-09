@@ -1,5 +1,3 @@
-// Writes a synthetic two-page 100 x 150 mm PDF (no real data) for dry runs and hardware checks.
-// Usage: bun scripts/make-sample-pdf.ts [out.pdf]
 const out = Bun.argv[2] ?? "samples/sample-100x150.pdf";
 const W = (100 / 25.4) * 72;
 const H = (150 / 25.4) * 72;
@@ -8,17 +6,14 @@ function page(n: number): string {
   const ops: string[] = ["2 w", `10 10 ${W - 20} ${H - 20} re S`];
   ops.push(`BT /F1 28 Tf 24 ${H - 60} Td (BP730i TEST ${n}/2) Tj ET`);
   ops.push(`BT /F1 10 Tf 24 ${H - 80} Td (Synthetic label - no real data) Tj ET`);
-  // Bar pattern with widths of 1 to 4 dots at 300 dpi, to check that thin lines survive.
   let x = 24;
   for (let i = 0; i < 40; i++) {
     const w = ((i % 4) + 1) * (72 / 300);
     ops.push(`${x.toFixed(3)} ${H - 180} ${w.toFixed(3)} 80 re f`);
     x += w * 2 + 0.5;
   }
-  // Gray ramp to compare threshold and dithering.
   for (let i = 0; i < 10; i++) ops.push(`${i / 9} g ${24 + i * 23} ${H - 260} 23 50 re f`);
   ops.push("0 g");
-  // Corner marks one dot inside the label edge, to check offsets and alignment.
   for (const [cx, cy] of [
     [0, 0],
     [W - 12, 0],

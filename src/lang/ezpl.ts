@@ -3,16 +3,11 @@ import type { PrintSettings } from "../settings.ts";
 import { mmToDots } from "../units.ts";
 import { type Dialect, encodeText, type Job } from "./types.ts";
 
-// Order and syntax follow the Windows driver (Seagull_PrintModule_GDX.dll, FUN_18000b1b0 and
-// FUN_1800012e0); GoLabel II builds the same commands. Sources per command are in src/reference.ts.
-
 const CRLF = "\r\n";
 
-/** Millimetres with one decimal, as the driver writes them (Measurement::MM10). */
-const mmd = (mm: number): string => mm.toFixed(1);
+const mmOneDecimal = (mm: number): string => mm.toFixed(1);
 
-/** Job configuration: sent once per job. EZPL stores these values permanently. */
-function configLines(s: PrintSettings): string[] {
+function persistentConfigLines(s: PrintSettings): string[] {
   const out: string[] = [];
   if (s.method !== undefined) out.push(s.method === "thermal-transfer" ? "^AT" : "^AD");
   if (s.postPrint !== undefined) {
@@ -27,23 +22,22 @@ function configLines(s: PrintSettings): string[] {
   return out;
 }
 
-/** Label geometry: the driver repeats it in front of every format. */
 function formatLines(s: PrintSettings): string[] {
   const out: string[] = [];
   if (s.lengthMm !== undefined) {
-    const len = mmd(s.lengthMm);
+    const len = mmOneDecimal(s.lengthMm);
     const sensing = s.sensing ?? { kind: "gap", gapMm: 3 };
     switch (sensing.kind) {
       case "gap":
-        out.push(`^Q${len},${mmd(sensing.gapMm)}`);
+        out.push(`^Q${len},${mmOneDecimal(sensing.gapMm)}`);
         break;
       case "black-mark": {
         const sign = sensing.offsetMm < 0 ? "-" : "+";
-        out.push(`^Q${len},${mmd(sensing.markMm)},${mmd(Math.abs(sensing.offsetMm))}${sign}`);
+        out.push(`^Q${len},${mmOneDecimal(sensing.markMm)},${mmOneDecimal(Math.abs(sensing.offsetMm))}${sign}`);
         break;
       }
       case "continuous":
-        out.push(`^Q${len},0,${mmd(sensing.feedMm)}`);
+        out.push(`^Q${len},0,${mmOneDecimal(sensing.feedMm)}`);
         break;
     }
   }
@@ -52,7 +46,7 @@ function formatLines(s: PrintSettings): string[] {
     const dots = mmToDots(s.homeYMm);
     out.push(`~Q${dots > 0 ? "+" : ""}${dots}`);
   }
-  if (s.stopPositionMm !== undefined) out.push(`^E${mmd(s.stopPositionMm)}`);
+  if (s.stopPositionMm !== undefined) out.push(`^E${mmOneDecimal(s.stopPositionMm)}`);
   return out;
 }
 
@@ -60,7 +54,7 @@ const lines = (l: readonly string[]) => l.map((x) => x + CRLF).join("");
 
 function encodeJob(job: Job): Uint8Array {
   const s = job.settings;
-  const parts: Uint8Array[] = [encodeText(lines([...configLines(s), "^C1"]))];
+  const parts: Uint8Array[] = [encodeText(lines([...persistentConfigLines(s), "^C1"]))];
   const format = lines([`^P${job.copies}`, ...formatLines(s), `^L${s.mirror ? "M" : ""}${s.inverse ? "I" : ""}`]);
   for (const page of job.pages) {
     parts.push(encodeText(format));
@@ -71,7 +65,6 @@ function encodeJob(job: Job): Uint8Array {
   return new Uint8Array(Bun.concatArrayBuffers(parts));
 }
 
-/** Finds every `Qx,y,wb,h` raster that encodeJob wrote and returns it as a bitmap. */
 function decodeGraphics(data: Uint8Array): Bitmap[] {
   const out: Bitmap[] = [];
   const text = new TextDecoder("latin1").decode(data);
@@ -96,7 +89,7 @@ export const LANGUAGE_SWITCH = { ezpl: "~S,ESG\r\n", zpl: "~S,ESZ\r\n", auto: "~
 export const ezpl: Dialect = {
   language: "ezpl",
   encodeJob,
-  encodeSettings: (s) => encodeText(lines([...configLines(s), ...formatLines(s)])),
+  encodeSettings: (s) => encodeText(lines([...persistentConfigLines(s), ...formatLines(s)])),
   controls: {
     calibrate: "~S,SENSOR\r\n",
     feed: "~S,FEED\r\n",

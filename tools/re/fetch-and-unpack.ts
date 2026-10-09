@@ -1,11 +1,3 @@
-// Downloads the vendor driver, GoLabel II and documents, checks their SHA-256, and unpacks them
-// to the layout the notes in docs/reverse-engineering/ refer to. Optionally decompiles the
-// driver modules with Ghidra headless.
-//
-// Needs: 7z, cabextract, msiextract (msitools). Ghidra step needs GHIDRA_HOME and a JDK.
-// Usage: bun tools/re/fetch-and-unpack.ts [dir=~/re-bp730i] [--ghidra]
-// Downloaded files are untrusted: nothing here executes them.
-
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { $ } from "bun";

@@ -1,7 +1,3 @@
-/**
- * Ways to get bytes to the printer. Only TCP has a back channel: CUPS jobs are one-way,
- * so status and configuration queries need TCP port 9100.
- */
 export type Transport =
   | { readonly kind: "cups"; readonly queue: string }
   | { readonly kind: "tcp"; readonly host: string; readonly port: number }

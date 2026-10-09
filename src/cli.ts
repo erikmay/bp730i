@@ -175,7 +175,6 @@ function parsePostPrint(v: Values): PostPrint | undefined {
   }
 }
 
-/** Builds settings from flags. Only flags the user gave become settings. */
 function parseSettings(v: Values): PrintSettings {
   const s: { -readonly [K in keyof PrintSettings]?: PrintSettings[K] } = {};
   const set = <K extends keyof PrintSettings>(key: K, value: PrintSettings[K] | undefined) => {

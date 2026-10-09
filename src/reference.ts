@@ -1,21 +1,7 @@
 import type { Language } from "./lang/types.ts";
 
-/**
- * Every command this library sends, with the evidence for its syntax.
- * `hardware` is "verified" only when a real BP730i printed or answered as expected.
- * scripts/gen-command-table.ts renders this table into the README; a test checks that the
- * encoders emit no command missing from it.
- *
- * Source abbreviations:
- *   GDX-PM / GDX-CM = Seagull_PrintModule_GDX.dll / Seagull_ConfigModule_GDX.dll (Windows driver, EZPL), Ghidra address
- *   ZPL-PM / ZPL-CM = Seagull_PrintModule_ZPL.dll / Seagull_ConfigModule_ZPL.dll (Windows driver, GZPL)
- *   GL = GoLabel II 2.1.9558 decompiled (QLabelSDK, GoLabel), file:line
- *   EZPL m.N = Godex EZPL Programmer's Manual Rev. O.4, printed page N (cross-check only)
- *   .d = driver data tables in xg#gdx / xg#zpl *.ddz
- */
 export interface CommandRef {
   readonly language: Language;
-  /** The command token as it appears in output, used to match emitted commands. */
   readonly token: string;
   readonly syntax: string;
   readonly use: string;
