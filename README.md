@@ -4,7 +4,7 @@ A Bun library and CLI that prints on the Labelident BP730i label printer from ma
 
 Most commands come from the decompiled Windows driver (`Generic_BP_v2023.2.exe`, a Seagull Scientific driver) and from GoLabel II. A few come only from the Godex EZPL manual. The [command reference](#command-reference) names the source of each command and whether it worked on the real printer.
 
-> **Hardware status.** A complete EZPL label job prints correctly on a BP730i over USB (`^C1 ^P ^Q ^W ^L`, the `Q` raster and `E`), in the right position, not mirrored or inverted. Copies, several pages in one job, darkness (`^H`), speed (`^S`) and the configuration label (`~V`) also work. The other commands are **unverified**. To check them, run the [hardware check](#check-the-commands-on-the-printer) on the Mac.
+> **Hardware status.** A complete EZPL label job prints correctly on a BP730i over USB (`^C1 ^P ^Q ^W ^L`, the `Q` raster and `E`), in the right position, not mirrored or inverted. Copies, several pages in one job, darkness (`^H`), speed (`^S`), home position (`^R`, `~Q`), mirror and inverse (`^LM`, `^LI`), calibration (`~S,SENSOR`), feed (`~S,FEED`), reset (`~Z`) and the configuration label (`~V`) also work. The other commands are **unverified**. The [hardware check](#check-the-commands-on-the-printer) lists the results and covers the rest.
 
 ## Install
 
@@ -30,7 +30,7 @@ bp730i setup                    # run them (use sudo if lpadmin asks for it)
 bp730i setup --uri 'usb://...'  # if lpinfo -v does not list the printer
 ```
 
-The command takes the first USB URI from `lpinfo -v` that contains `BP730`. Your existing queue uses `usb:///BP730i?serial=190307B1`, so it matches. Running the command again updates the same queue.
+The command takes the first USB URI from `lpinfo -v` that contains `BP730`. A BP730i shows up as `usb:///BP730i?serial=<serial>`, so it matches. Running the command again updates the same queue.
 
 ## Print
 
@@ -39,9 +39,12 @@ bp730i print shipping-label.pdf                       # 100 x 150 mm, 2 mm gap
 bp730i print shipping-label.pdf --darkness 10 --copies 2
 bp730i print product.pdf --size 50x30 --gap 3 --pages 2-3
 bp730i print logo.png --size 50x30 --scale fill --dither floyd-steinberg
+bp730i print cat.jpg --photo
 ```
 
 Each PDF page or image becomes one label. Without `--size`, `print` uses the 100 x 150 mm roll with a 2 mm gap. A PDF page in landscape on a portrait label (or the reverse) is turned by 90 degrees clockwise. Use `--rotate 0` to keep it as it is, or `--rotate 270` to turn it the other way.
+
+Use `--photo` for photos. A thermal dot prints larger than one pixel, so dithered midtones come out much darker than on screen. A photo printed with Floyd-Steinberg dithering alone lost whole areas to black. `--photo` stretches the contrast, lightens the midtones (gamma 3, tuned on this printer) and uses ordered dithering, which keeps dots apart.
 
 Use `--output file` or `--dry-run` to write the job to a file instead of sending it. Use `--preview dir` to write one PNG per label, decoded from the encoded job, so you see exactly what the printer receives.
 
@@ -56,12 +59,18 @@ This tool sends only EZPL, so it cannot lock the printer to another language. Th
 
 The EZPL manual confirms this behavior: "When a printer switch to certain language, it can auto detect and switch again by rebooting printer" (EZPL manual Rev. O.4, p. 84). It documents a command switch (`~S,ESG`, `~S,ESZ`, `~S,ESA`), but calls it temporary and gives no way back from ZPL without a reboot. This tool does not send the switch: it adds nothing when every job is EZPL, and an EZPL command probably cannot reach a printer that is locked to ZPL, because `~V` cannot. The RT730i manual lists no menu item for the command language. See [coverage](docs/reverse-engineering/coverage.md) for the evidence.
 
+### Stop a job
+
+Use `bp730i reset` (`~Z`): the printer restarts and drops the job. Do **not** cancel a job in CUPS while it is being sent. The printer keeps the half-received image and reads the start of the next job as image data, so the next label prints as garbage. If that happened, run `bp730i reset` and `bp730i calibrate`.
+
+`bp730i cancel` (`~S,CANCEL`) cannot stop a job sent over CUPS in time: CUPS sends it only after the whole job, and a 100 x 150 mm label prints in about 1.2 s at speed 5.
+
 ## CLI reference
 
 ```text
 bp730i print <file.pdf|png|jpg> [options]   Print a PDF (all pages or --pages) or an image
 bp730i settings [options]                   Send media and print settings only (the printer stores them)
-bp730i calibrate | feed | cancel | self-test
+bp730i calibrate | feed | cancel | self-test | reset
 bp730i status | config | version            Ask the printer (needs --host, TCP 9100)
 bp730i raw <file|->                         Send a file of printer commands unchanged
 bp730i setup [--queue NAME] [--uri URI]     Create the raw CUPS queue (macOS)
@@ -98,6 +107,7 @@ Image options:
 | `--scale MODE` | `fit` | `fit` keeps the whole image, `fill` crops to cover the label, `none` keeps 300 dpi size. The image is centered. |
 | `--rotate DEG` | `auto` | `auto`, `0`, `90`, `180`, `270`, clockwise. `auto` turns by 90 when page and label orientation differ. |
 | `--dither MODE` | `threshold` | `threshold`, `floyd-steinberg`, `ordered` |
+| `--photo` | off | Contrast stretch and gamma 3 against thermal dot gain; `ordered` dithering unless `--dither` is given |
 | `--threshold N` | `128` | Gray levels below N print black |
 | `--offset-x MM`, `--offset-y MM` | `0` | Move the image on the label (in the raster, not on the printer) |
 | `--copies N` | `1` | Copies of each page |
@@ -135,7 +145,7 @@ await send({ kind: "cups", queue: "BP730i_RAW" }, job);
 // or: await send({ kind: "tcp", host: "192.168.1.50", port: 9100 }, job);
 ```
 
-`encodeJob` and `encodeSettings` validate the settings and throw one error that lists every value out of range. `CONTROLS` holds the one-way commands (calibrate, feed, cancel, self-test) and `QUERIES` the commands that answer (status, config, version). `exchange` sends bytes over TCP and returns the printer's answer, and `describeReply` decodes a status answer.
+`encodeJob` and `encodeSettings` validate the settings and throw one error that lists every value out of range. `CONTROLS` holds the one-way commands (calibrate, feed, cancel, self-test, reset) and `QUERIES` the commands that answer (status, config, version). `exchange` sends bytes over TCP and returns the printer's answer, and `describeReply` decodes a status answer.
 
 ## Check the commands on the printer
 
@@ -146,7 +156,21 @@ bun scripts/hardware-check.ts                         # over CUPS
 bun scripts/hardware-check.ts --host 192.168.1.50     # over TCP, adds the query steps
 ```
 
-The script covers only the commands that are still unverified, in 8 steps (11 with `--host`), and uses about 18 labels. It first asks you to switch the printer off and on, so that its EZPL job is the first job after power-on (see [Language lock](#language-lock)). The first two steps store test values and print configuration labels that must show them. At the end, also after an error or Ctrl-C, the script restores this printer's values (`--stop 16 --home-x 0 --home-y 0 --sensor see-through`) and prints a configuration label to confirm them. It saves the answers after each step. Each step says what you should see, then asks `y`, `n` or `s` (skip) and an optional note. The answers go to `hardware-check-<time>.md`.
+The script covers only the commands that are still unverified, in 3 steps (7 with `--host`), and uses a few labels. It first asks you to switch the printer off and on, so that its EZPL job is the first job after power-on (see [Language lock](#language-lock)). The first two steps store test values and print configuration labels that must show them. At the end, also after an error or Ctrl-C, the script restores this printer's values (`--stop 16 --sensor see-through`) and prints a configuration label to confirm them. It saves the answers after each step. Each step says what you should see, then asks `y`, `n` or `s` (skip) and an optional note. The answers go to `hardware-check-<time>.md`.
+
+Results of the run on 2026-10-09 (USB, CUPS):
+
+| Command | Result |
+|---|---|
+| `^R`, `~Q` | Stored, and the print moves by the set amount |
+| `^E` | Stored (`^E15` on the configuration label). `--stop 0` and `--stop 16` stopped the label at the same place. |
+| `^G2`, `^G1` | No visible effect: the sensor line stayed `See.` |
+| `^LM`, `^LI` | Mirrored and inverted as expected |
+| `~S,FEED`, `~S,SENSOR` | One label fed; calibration fed a few labels and stopped at a label start |
+| `~S,CANCEL` | All 5 labels printed. Over CUPS the cancel arrives too late (see [Stop a job](#stop-a-job)). |
+| `~Z` | The printer restarts |
+
+Once, a job sent right after `--home-x 5 --home-y 5` stalled: CUPS kept sending, the printer showed Ready and took no data. The cause is not known. `bp730i reset` recovers the printer.
 
 For each step marked "as expected", set the command to verified in `src/reference.ts`, then run `bun run docs:commands` to update the table below.
 
@@ -174,20 +198,21 @@ Settings that need a person, not a command: moving the media sensor, loading rib
 | `^Sn, n=2..5 ips` | --speed | GDX-PM FUN_18000b1b0, FUN_180009620; .d Model.d:5420; EZPL m.30 | verified |
 | `^Hn, n=0..19` | --darkness | GDX-PM FUN_18000c2f0 case 5; GL PrinterModel.xml BP730i; EZPL m.24 | verified |
 | `^Gn, n=0 reflective, 1 see-through, 2 auto` | --sensor | GDX-CM FUN_180003bb0; GL PrinterSetup.cs:6124; EZPL m.24 (manual contradicts itself on 0/1) | **unverified** |
-| `^Rn, n=0..399 dots` | --home-x (left margin) | GL Setup.cs:403; EZPL m.30 (not emitted by Windows driver) | **unverified** |
+| `^Rn, n=0..399 dots` | --home-x (left margin) | GL Setup.cs:403; EZPL m.30 (not emitted by Windows driver) | verified |
 | `^C1` | always 1 (copies via ^P) | GDX-PM FUN_18000b1b0 type 4 | verified |
 | `^Pn, n=1..9999` | --copies (per page) | GDX-PM FUN_18000bab0; .d Method.d Copies.Limit | verified |
 | `^Qlen,gap (mm, 1 decimal), e.g. ^Q150.0,2.0` | --size L, --gap | GDX-PM FUN_18000bd50; GL Setup.cs:370; EZPL m.28 | verified |
 | `^Qlen,mark,offset+/- \| ^Qlen,0,feed (mm, 1 decimal)` | --mark / --continuous | GDX-PM FUN_18000bd50; GL Setup.cs:370; EZPL m.28 | **unverified** |
 | `^Wn (whole mm)` | --size W | GDX-PM FUN_18000b570 type 10; GL Setup.cs:383; EZPL m.31 | verified |
-| `~Q+n / ~Q-n, dots -100..100` | --home-y | GDX-PM FUN_18000c780; GL Setup.cs:406; EZPL m.79 | **unverified** |
+| `~Q+n / ~Q-n, dots -100..100` | --home-y | GDX-PM FUN_18000c780; GL Setup.cs:406; EZPL m.79 | verified |
 | `^En (mm, 1 decimal)` | --stop | GDX-PM FUN_18000c2f0 case 3; GL Setup.cs:422; EZPL m.23 | **unverified** |
 | `^L` | begin label | GDX-PM FUN_18000bc50; EZPL m.25 | verified |
-| `^L[M][I]` | --mirror, --inverse | GDX-PM FUN_18000bc50; .d Features.d [Godex_PlusSeries]; EZPL m.25 | **unverified** |
+| `^L[M][I]` | --mirror, --inverse | GDX-PM FUN_18000bc50; .d Features.d [Godex_PlusSeries]; EZPL m.25 | verified |
 | `Qx,y,bytesPerRow,rows<CR> + raw rows, 1 = black, MSB left` | every image | GDX-PM FUN_180006900; GL PrintJob.cs:2169 (LF instead of CR); EZPL m.114 | verified |
 | `E` | end label, print | GDX-PM FUN_18000bb80; GL QLabel.cs:4409 | verified |
-| `~S,SENSOR` | calibrate | GDX-CM FUN_180002810; GL SvgArtiste.cs:5513; EZPL m.82 | **unverified** |
-| `~S,FEED` | feed | EZPL m.84 only | **unverified** |
+| `~S,SENSOR` | calibrate | GDX-CM FUN_180002810; GL SvgArtiste.cs:5513; EZPL m.82 | verified |
+| `~S,FEED` | feed | EZPL m.84 only | verified |
+| `~Z` | reset (printer restarts) | GL SvgArtiste.cs:5388 'reset printer'; EZPL m.87 | verified |
 | `~S,CANCEL` | cancel | GL SvgArtiste.cs:10275; EZPL m.84 | **unverified** |
 | `~V` | self-test (prints the configuration label) | GDX-CM FUN_180002810; GL SvgArtiste.cs:5404; EZPL m.85 | verified |
 | `^XSET,IMMEDIATE,1` | sent before status | GDX-CM FUN_180001430; EZPL m.44 | **unverified** |

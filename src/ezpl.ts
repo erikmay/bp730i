@@ -19,6 +19,8 @@ export const CONTROLS = {
   feed: `~S,FEED${CRLF}`,
   cancel: `~S,CANCEL${CRLF}`,
   "self-test": `~V${CRLF}`,
+  /** Restarts the printer like a power cycle and drops any half-received job from its buffer. */
+  reset: `~Z${CRLF}`,
 } as const;
 export type Control = keyof typeof CONTROLS;
 

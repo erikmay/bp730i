@@ -45,13 +45,15 @@ const HELP = `bp730i: driverless printing for the Labelident BP730i (Godex RT730
 Usage:
   bp730i print <file.pdf|png|jpg> [options]   Print a PDF (all pages or --pages) or an image
   bp730i settings [options]                   Send media and print settings only (the printer stores them)
-  bp730i calibrate | feed | cancel | self-test
+  bp730i calibrate | feed | cancel | self-test | reset
   bp730i status | config | version            Ask the printer (needs --host, TCP 9100)
   bp730i raw <file|->                         Send a file of printer commands unchanged
   bp730i setup [--queue NAME] [--uri URI]     Create the raw CUPS queue (macOS)
 
 All commands use EZPL. If the printer ignores every job (only the display reacts), it is
 locked to another command language: switch it off and on. See "Language lock" in the README.
+To stop a job, use "bp730i reset". Do not cancel a running job in CUPS: the printer keeps the
+half-received image and prints the next job as garbage.
 
 Label and media (mm):
   --size WxL            Label width x length (default ${DEFAULT_SIZE.widthMm}x${DEFAULT_SIZE.lengthMm} for print)
@@ -77,6 +79,8 @@ Image:
   --rotate DEG          auto | 0 | 90 | 180 | 270 (default auto: turn landscape pages
                         on a portrait label by 90 degrees, and the reverse)
   --dither MODE         threshold | floyd-steinberg | ordered (default threshold)
+  --photo               For photos: stretch contrast, lighten midtones against dot gain,
+                        and use ordered dithering unless --dither is given
   --threshold N         1..255, gray level that prints black below it (default 128)
   --offset-x MM, --offset-y MM   Move the image on the label
   --copies N            Copies of each page (default 1)
@@ -107,6 +111,7 @@ const OPTIONS = {
   "home-y": { type: "string" },
   mirror: { type: "boolean" },
   inverse: { type: "boolean" },
+  photo: { type: "boolean" },
   pages: { type: "string" },
   scale: { type: "string" },
   rotate: { type: "string" },
@@ -226,10 +231,13 @@ function parseImage(v: Values): ImageOptions {
   return {
     scale: oneOf(v, "scale", ["fit", "fill", "none"] as const) ?? DEFAULT_IMAGE_OPTIONS.scale,
     rotate: ROTATIONS[oneOf(v, "rotate", ["auto", "0", "90", "180", "270"] as const) ?? "auto"],
-    dither: oneOf<Dither>(v, "dither", ["threshold", "floyd-steinberg", "ordered"]) ?? DEFAULT_IMAGE_OPTIONS.dither,
+    dither:
+      oneOf<Dither>(v, "dither", ["threshold", "floyd-steinberg", "ordered"]) ??
+      (v.photo ? "ordered" : DEFAULT_IMAGE_OPTIONS.dither),
     threshold: numberIn(v, "threshold", 1, 255) ?? DEFAULT_IMAGE_OPTIONS.threshold,
     offsetXDots: mmToDots(number(v, "offset-x") ?? 0),
     offsetYDots: mmToDots(number(v, "offset-y") ?? 0),
+    photo: v.photo ?? false,
   } satisfies ImageOptions;
 }
 
@@ -296,7 +304,8 @@ async function main(argv: string[]): Promise<void> {
     case "calibrate":
     case "feed":
     case "cancel":
-    case "self-test": {
+    case "self-test":
+    case "reset": {
       const control: Control = command;
       await deliver(transportFor(v, `${control}.ezpl`), encodeText(CONTROLS[control]), control);
       return;

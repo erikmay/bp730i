@@ -22,18 +22,19 @@ async function bp(...args: string[]): Promise<void> {
 }
 const print = (...args: string[]) => bp("print", sample, "--pages", "1", ...args);
 
-/** Values from the configuration label of this printer (^E16 ^R000 ~Q+0, sensor "See."). */
-const RESTORE = ["--stop", "16", "--home-x", "0", "--home-y", "0", "--sensor", "see-through"];
+/** Values from the configuration label of this printer (^E16, sensor "See."). */
+const RESTORE = ["--stop", "16", "--sensor", "see-through"];
 
 const STEPS: Step[] = [
   {
     id: "stored-settings",
-    proves: "^G2 ^R ~Q ^E are stored",
+    proves: "^G2 ^E are stored",
     run: async () => {
-      await bp("settings", "--sensor", "auto", "--stop", "15", "--home-x", "2", "--home-y", "3");
+      await bp("settings", "--sensor", "auto", "--stop", "15");
       await bp("self-test");
     },
-    expect: "A configuration label with ^E15, ^R024, ~Q+35, and a sensor line that no longer starts with 'See.'.",
+    expect:
+      "A configuration label with ^E15 and a sensor line that no longer starts with 'See.'. (2026-10-09: ^E15 stored, sensor stayed 'See.'.)",
   },
   {
     id: "sensor-see-through",
@@ -54,50 +55,20 @@ const STEPS: Step[] = [
     expect:
       "After the second label the gap stops at the tear bar. After the first it stopped about 16 mm further back.",
   },
-  {
-    id: "home-position",
-    proves: "^R and ~Q shift the print",
-    run: async () => {
-      await print("--home-x", "5", "--home-y", "5");
-      await print("--home-x", "0", "--home-y", "0");
-    },
-    expect: "The first label is shifted about 5 mm right and 5 mm down compared with the second.",
-  },
-  {
-    id: "mirror-inverse",
-    proves: "^LM ^LI",
-    run: async () => {
-      await print("--mirror");
-      await print("--inverse");
-    },
-    expect: "First label mirrored left to right. Second label white on black.",
-  },
-  {
-    id: "cancel",
-    proves: "~S,CANCEL",
-    run: async () => {
-      await print("--copies", "5");
-      await Bun.sleep(1500);
-      await bp("cancel");
-    },
-    expect: "The printer stops before it has printed all 5 labels.",
-  },
-  {
-    id: "feed",
-    proves: "~S,FEED",
-    run: () => bp("feed"),
-    expect: "The printer feeds exactly one label.",
-  },
-  {
-    id: "calibrate",
-    proves: "~S,SENSOR",
-    run: () => bp("calibrate"),
-    expect: "The printer feeds a few labels, measures them and stops at a label start.",
-  },
 ];
 
 if (values.host) {
   const host = values.host;
+  // Over CUPS the cancel arrives only after the whole job, too late to stop it. Over TCP it can overtake the job.
+  STEPS.push({
+    id: "cancel",
+    proves: "~S,CANCEL",
+    run: async () => {
+      await print("--copies", "5");
+      await bp("cancel");
+    },
+    expect: "The printer stops before it has printed all 5 labels.",
+  });
   for (const query of Object.keys(QUERIES) as Query[])
     STEPS.push({
       id: `tcp-${query}`,
@@ -133,7 +104,7 @@ async function restore(): Promise<void> {
   console.log(`\nRestoring this printer's values: settings ${RESTORE.join(" ")}`);
   await bp("settings", ...RESTORE);
   await bp("self-test");
-  console.log("Check the configuration label: ^E16, ^R000, ~Q+0 and the sensor line 'See.'.");
+  console.log("Check the configuration label: ^E16 and the sensor line 'See.'.");
 }
 process.on("SIGINT", async () => {
   await restore();
