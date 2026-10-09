@@ -1,17 +1,12 @@
 import jpeg from "jpeg-js";
 import { PNG } from "pngjs";
 import type { GrayImage } from "./raster.ts";
+import { DPI } from "./units.ts";
 
 export interface PageRange {
   readonly first: number;
   /** Inclusive. Undefined means the last page. */
   readonly last?: number;
-}
-
-export interface RenderOptions {
-  /** Resolution for PDF rendering. The BP730i prints at 300 dpi. */
-  readonly dpi: number;
-  readonly pages?: PageRange;
 }
 
 /** Parses "3", "2-5", "4-" into a page range. */
@@ -24,15 +19,14 @@ export function parsePageRange(spec: string): PageRange {
   return last === undefined ? { first } : { first, last };
 }
 
-/** Loads a PDF, PNG or JPEG file as one grayscale image per page. */
-export async function loadPages(path: string, opts: RenderOptions): Promise<GrayImage[]> {
+/** Loads a PDF, PNG or JPEG file as one grayscale image per page. PDFs render at the printer resolution. */
+export async function loadPages(path: string, pages?: PageRange): Promise<GrayImage[]> {
   const file = Bun.file(path);
   if (!(await file.exists())) throw new Error(`File not found: ${path}`);
   const bytes = new Uint8Array(await file.arrayBuffer());
   const kind = sniff(bytes);
-  if (kind === "pdf") return renderPdf(path, opts);
-  if (opts.pages && (opts.pages.first !== 1 || (opts.pages.last ?? 1) !== 1))
-    throw new Error("Page ranges apply only to PDF input.");
+  if (kind === "pdf") return renderPdf(path, pages);
+  if (pages && (pages.first !== 1 || (pages.last ?? 1) !== 1)) throw new Error("Page ranges apply only to PDF input.");
   return [kind === "png" ? decodePng(bytes) : decodeJpeg(bytes)];
 }
 
@@ -67,11 +61,11 @@ function decodeJpeg(bytes: Uint8Array): GrayImage {
   return flattenOnWhiteToGray(img.width, img.height, img.data);
 }
 
-async function renderPdf(path: string, opts: RenderOptions): Promise<GrayImage[]> {
-  const args = ["pdftoppm", "-gray", "-r", String(opts.dpi)];
-  if (opts.pages) {
-    args.push("-f", String(opts.pages.first));
-    if (opts.pages.last !== undefined) args.push("-l", String(opts.pages.last));
+async function renderPdf(path: string, pages?: PageRange): Promise<GrayImage[]> {
+  const args = ["pdftoppm", "-gray", "-r", String(DPI)];
+  if (pages) {
+    args.push("-f", String(pages.first));
+    if (pages.last !== undefined) args.push("-l", String(pages.last));
   }
   args.push(path);
   let proc: Bun.Subprocess<"ignore", "pipe", "pipe">;
@@ -86,9 +80,9 @@ async function renderPdf(path: string, opts: RenderOptions): Promise<GrayImage[]
     proc.exited,
   ]);
   if (code !== 0) throw new Error(`pdftoppm failed (${code}): ${err.trim()}`);
-  const pages = parsePgmStream(out);
-  if (pages.length === 0) throw new Error(`No pages rendered from ${path}. Check the page range.`);
-  return pages;
+  const images = parsePgmStream(out);
+  if (images.length === 0) throw new Error(`No pages rendered from ${path}. Check the page range.`);
+  return images;
 }
 
 export function parsePgmStream(buf: Uint8Array): GrayImage[] {

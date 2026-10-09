@@ -23,6 +23,7 @@ export type SensorType = "reflective" | "see-through" | "auto";
  */
 export interface PrintSettings {
   readonly widthMm?: number;
+  /** Sent (EZPL ^Q) only together with `sensing`, because ^Q also sets the gap or mark. */
   readonly lengthMm?: number;
   readonly sensing?: MediaSensing;
   readonly sensor?: SensorType;

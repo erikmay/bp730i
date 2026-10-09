@@ -21,7 +21,8 @@ export interface RasterOptions {
   readonly widthDots: number;
   readonly heightDots: number;
   readonly scale: ScaleMode;
-  readonly rotate: Rotation;
+  /** "auto" turns the image by 90 degrees when it is landscape and the label is portrait, or the reverse. */
+  readonly rotate: Rotation | "auto";
   readonly dither: Dither;
   /** Gray level below which a pixel prints black, 0..255. Used by "threshold" and as the bias of the other modes. */
   readonly threshold: number;
@@ -153,8 +154,15 @@ export function toBitmap(img: GrayImage, dither: Dither, threshold: number): Bit
   return { width, height, bytesPerRow, data };
 }
 
+function autoRotation(img: GrayImage, opts: RasterOptions): Rotation {
+  const imageOrientation = Math.sign(img.width - img.height);
+  const labelOrientation = Math.sign(opts.widthDots - opts.heightDots);
+  return imageOrientation * labelOrientation < 0 ? 90 : 0;
+}
+
 export function rasterize(img: GrayImage, opts: RasterOptions): Bitmap {
-  return toBitmap(layout(rotate(img, opts.rotate), opts), opts.dither, opts.threshold);
+  const deg = opts.rotate === "auto" ? autoRotation(img, opts) : opts.rotate;
+  return toBitmap(layout(rotate(img, deg), opts), opts.dither, opts.threshold);
 }
 
 export function bitmapToGray(bmp: Bitmap): GrayImage {

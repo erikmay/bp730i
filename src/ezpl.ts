@@ -1,9 +1,36 @@
-import type { Bitmap } from "../raster.ts";
-import type { PrintSettings } from "../settings.ts";
-import { mmToDots } from "../units.ts";
-import { type Dialect, encodeText, type Job } from "./types.ts";
+import type { Bitmap } from "./raster.ts";
+import type { PrintSettings } from "./settings.ts";
+import { mmToDots } from "./units.ts";
+import { validateSettings } from "./validate.ts";
+
+export interface Job {
+  readonly settings: PrintSettings;
+  /** One bitmap per label. Each must already have the label size in dots. */
+  readonly pages: readonly Bitmap[];
+  /** Copies of each page. */
+  readonly copies: number;
+}
 
 const CRLF = "\r\n";
+
+/** One-way commands that change printer state or move media. */
+export const CONTROLS = {
+  calibrate: `~S,SENSOR${CRLF}`,
+  feed: `~S,FEED${CRLF}`,
+  cancel: `~S,CANCEL${CRLF}`,
+  "self-test": `~V${CRLF}`,
+} as const;
+export type Control = keyof typeof CONTROLS;
+
+/** Commands that make the printer answer. Answers only arrive over TCP. */
+export const QUERIES = {
+  status: `^XSET,IMMEDIATE,1${CRLF}~S,STATUS${CRLF}`,
+  config: `^XGET,CONFIG${CRLF}`,
+  version: `~B${CRLF}`,
+} as const;
+export type Query = keyof typeof QUERIES;
+
+export const encodeText = (s: string): Uint8Array => new TextEncoder().encode(s);
 
 /** Rounds half away from zero on whole micrometres, like the driver (Measurement::MM10 via MulDiv). */
 const mmOneDecimal = (mm: number): string =>
@@ -26,9 +53,9 @@ function persistentConfigLines(s: PrintSettings): string[] {
 
 function formatLines(s: PrintSettings): string[] {
   const out: string[] = [];
-  if (s.lengthMm !== undefined) {
+  if (s.lengthMm !== undefined && s.sensing !== undefined) {
     const len = mmOneDecimal(s.lengthMm);
-    const sensing = s.sensing ?? { kind: "gap", gapMm: 3 };
+    const sensing = s.sensing;
     switch (sensing.kind) {
       case "gap":
         out.push(`^Q${len},${mmOneDecimal(sensing.gapMm)}`);
@@ -54,7 +81,9 @@ function formatLines(s: PrintSettings): string[] {
 
 const lines = (l: readonly string[]) => l.map((x) => x + CRLF).join("");
 
-function encodeJob(job: Job): Uint8Array {
+/** Validates the settings and encodes a complete print job: setup commands and one label format per page. */
+export function encodeJob(job: Job): Uint8Array {
+  validateSettings(job.settings, job.copies);
   const s = job.settings;
   const parts: Uint8Array[] = [encodeText(lines([...persistentConfigLines(s), "^C1"]))];
   const format = lines([`^P${job.copies}`, ...formatLines(s), `^L${s.mirror ? "M" : ""}${s.inverse ? "I" : ""}`]);
@@ -67,7 +96,14 @@ function encodeJob(job: Job): Uint8Array {
   return new Uint8Array(Bun.concatArrayBuffers(parts));
 }
 
-function decodeGraphics(data: Uint8Array): Bitmap[] {
+/** Validates the settings and encodes them without a label. The printer stores them. */
+export function encodeSettings(settings: PrintSettings): Uint8Array {
+  validateSettings(settings);
+  return encodeText(lines([...persistentConfigLines(settings), ...formatLines(settings)]));
+}
+
+/** Extracts the bitmaps of an encoded job. Used for previews and round-trip checks. */
+export function decodeGraphics(data: Uint8Array): Bitmap[] {
   const out: Bitmap[] = [];
   const text = new TextDecoder("latin1").decode(data);
   const header = /(?:^|\r\n)Q(\d+),(\d+),(\d+),(\d+)[\r\n]/g;
@@ -82,29 +118,35 @@ function decodeGraphics(data: Uint8Array): Bitmap[] {
   return out;
 }
 
-/**
- * EZPL command that fixes the command language or returns to auto-detection. The printer
- * accepts it in any mode while auto-detection is on (EZPL manual m.84; unverified).
- */
-export const LANGUAGE_SWITCH = { ezpl: "~S,ESG\r\n", zpl: "~S,ESZ\r\n", auto: "~S,ESA\r\n" } as const;
-
-export const ezpl: Dialect = {
-  language: "ezpl",
-  encodeJob,
-  encodeSettings: (s) => encodeText(lines([...persistentConfigLines(s), ...formatLines(s)])),
-  controls: {
-    calibrate: "~S,SENSOR\r\n",
-    feed: "~S,FEED\r\n",
-    cancel: "~S,CANCEL\r\n",
-    reset: "~Z\r\n",
-    "factory-reset": "^Z\r\n",
-    "self-test": "~V\r\n",
-  },
-  queries: {
-    status: "^XSET,IMMEDIATE,1\r\n~S,STATUS\r\n",
-    config: "^XGET,CONFIG\r\n",
-    version: "~B\r\n",
-  },
-  unsupported: [],
-  decodeGraphics,
+/** ~S,CHECK / ~S,STATUS codes. Source: EZPL Programmer's Manual Rev. O.4 p.80; the driver maps the same codes. */
+export const STATUS_CODES: Readonly<Record<string, string>> = {
+  "00": "Ready",
+  "01": "Media empty or media jam",
+  "02": "Media jam",
+  "03": "Ribbon empty",
+  "04": "Print head open",
+  "05": "Rewinder full",
+  "06": "File system full",
+  "07": "Filename not found",
+  "08": "Duplicate name",
+  "09": "Syntax error",
+  "10": "Cutter jam",
+  "11": "Extended memory not found",
+  "13": "Waiting for label removal (peel)",
+  "20": "Pause",
+  "21": "Setting mode",
+  "22": "Keyboard mode",
+  "50": "Printing",
+  "60": "Data in process",
+  "62": "Print head overheat",
 };
+
+export function describeReply(query: Query, reply: string): string {
+  const text = reply.trim();
+  if (query === "status") {
+    const m = /(\d{2}),(\d{5})\s*$/.exec(text);
+    if (m)
+      return `${text}\nStatus ${m[1]}: ${STATUS_CODES[m[1]!] ?? "unknown code"}, ${Number(m[2])} labels left in job`;
+  }
+  return text;
+}

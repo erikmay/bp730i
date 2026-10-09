@@ -4,15 +4,15 @@ const START = "<!-- command-table:start -->";
 const END = "<!-- command-table:end -->";
 const cell = (s: string) => s.replaceAll("|", "\\|");
 
-function table(language: "ezpl" | "zpl"): string {
-  const rows = COMMANDS.filter((c) => c.language === language).map(
+function table(): string {
+  const rows = COMMANDS.map(
     (c) =>
       `| \`${cell(c.syntax)}\` | ${cell(c.use)} | ${cell(c.source)} | ${c.hardware === "verified" ? "verified" : "**unverified**"} |`,
   );
   return ["| Syntax | Used for | Source | Hardware |", "|---|---|---|---|", ...rows].join("\n");
 }
 
-const generated = `${START}\n\n### EZPL\n\n${table("ezpl")}\n\n### ZPL (GZPL emulation)\n\n${table("zpl")}\n\n${END}`;
+const generated = `${START}\n\n${table()}\n\n${END}`;
 const readme = await Bun.file("README.md").text();
 const start = readme.indexOf(START);
 const end = readme.indexOf(END);
