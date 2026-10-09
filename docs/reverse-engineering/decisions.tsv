@@ -16,3 +16,7 @@ ts	phase	decision	why	evidence	result
 2026-10-09T14:06:00Z	zpl	stop position and sensor select unsupported in ZPL, CLI warns	no driver command for them in GZPL; ~TA is relative and different	notes/zpl.md 2.1	written
 2026-10-09T14:06:00Z	test	reference-table test tightened after mutation (removing ^Db) did not fail it	prefix match let ^Db pass as ^D	test/commands.test.ts	mutations now caught
 2026-10-09T14:06:00Z	default	default language EZPL	native language of the Windows BP730i queue, all settings have commands, raw binary images half the size of ZPL hex	INF:258, notes/ezpl.md	decided; ZPL kept as fallback
+2026-10-09T14:12:12Z	review	accepted comment-sicko deletions (32) and its 6 rename/reshape flags	comments restated code or README; unverified darkness guess now in the function name	commit 40dbfb0	check green
+2026-10-09T14:17:02Z	review	fixed reviewer findings 1-10,12-14; kept ^PW round (matches raster width)	1-2 reproduced locally (spin on closed socket, unhandled ECONNREFUSED); fixed and re-run	commit 368e528	local TCP tests pass
+2026-10-09T14:17:02Z	raster	skip resampling when fit/fill factor within 1%	1182->1181 px resample caused 24282 px diff and blurred bars; now 0 px vs ImageMagick threshold	commit 42f35c1	0 px diff
+2026-10-09T14:17:27Z	ship	push branch and open draft PR	user asked for a draft PR (overrides pstack open-ready default)	task brief	open
