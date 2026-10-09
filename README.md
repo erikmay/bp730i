@@ -199,14 +199,15 @@ Settings that need a person, not a command: moving the media sensor, loading rib
 
 ## Reverse-engineering notes
 
-These are the main findings. The details are in [docs/reverse-engineering](docs/reverse-engineering/).
+These are the main findings. The details are in [docs/reverse-engineering](docs/reverse-engineering/). [coverage.md](docs/reverse-engineering/coverage.md) lists every printer feature with the decision whether this library uses it.
 
 - **The driver is a Seagull Scientific "Drivers by Seagull" build.** It is not a Godex driver. `Generic_BP_v2023.2.exe` is an InstallShield self-extractor (SHA-256 `d5508861…c8772`). It holds `BarcodePrinter.inf`, CAB files with the DLLs, and `.ddz` ZIP files with plain-text model tables (`Model.d`, `Features.d`, `Driver.d`).
 - **The queue name decides the language.** `BP730i` uses the GDX (EZPL) module. `BP730i GZPL` uses the ZPL module and `BP730i GEPL` the EPL module. All three map to the model entry `Godex_RT730i`.
 - **Model limits come from `Model.d [Godex_RT730i]`.** They are 300 dpi, printable width 105.7 mm, speeds 2..5 in/s, darkness default 8, cutter and stripper supported. GoLabel's `PrinterModel.xml` adds darkness 0..19, width 4..106 mm and length 3..762 mm.
-- **EZPL images are raw bitmaps.** The driver and GoLabel send `Qx,y,bytesPerRow,rows`, then raw rows with 1 as a black dot and the most significant bit on the left. The driver ends the header with CR and GoLabel with LF. This library uses CR. The driver also skips blank 8-row bands. This library sends the full page.
+- **EZPL images are raw bitmaps.** The driver and GoLabel send `Qx,y,bytesPerRow,rows`, then raw rows with 1 as a black dot and the most significant bit on the left. The driver ends the header with CR and GoLabel with LF. This library uses CR, as the manual's general rule says. The driver skips blank 8-row bands and pads the last band to a multiple of 8 rows. That is a side effect of its band splitter, not a firmware rule: GoLabel does not pad, and the exact height printed correctly. This library sends the full page with the exact height.
 - **The GoLabel download URL in the task returns HTTP 403.** The current GoLabel link on the [BP730 product page](https://www.labelident.com/bp730.html) works (SHA-256 `a08d5b39…4c067`). GoLabel II 2.1.9558 is a .NET program. ILSpy decompiles it to C#.
-- **The sources disagree in two places.** The Windows driver names its `~Z` job "Print Configuration", but GoLabel's "reset printer" menu and the EZPL manual use `~Z` for reset. The EZPL manual gives `^G0`/`^G1` opposite meanings on two pages. Both points are unverified.
+- **The sources disagree on `^G`.** The EZPL manual gives `^G0`/`^G1` opposite meanings on two pages. The hardware check settles it through the configuration label.
+- **Neither the driver nor GoLabel handles the language lock.** No module sends a language switch, and no command brings a ZPL-locked printer back to EZPL. Only a power cycle does.
 
 To repeat the extraction, run `bun tools/re/fetch-and-unpack.ts [dir] [--ghidra] [--ilspy]`. It downloads the driver, GoLabel, the EZPL manual and the RT730i manual, checks their SHA-256 and unpacks them. With `--ghidra` it decompiles the four driver modules with Ghidra headless (`GHIDRA_HOME` must be set). With `--ilspy` it decompiles the GoLabel assemblies (`ILSPYCMD` or `ilspycmd` on the PATH). The Ghidra scripts and the helper scripts that the analysis used are in `tools/re/`.
 
