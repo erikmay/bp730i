@@ -1,3 +1,6 @@
+import { init, type WrappedPdfiumModule } from "@embedpdf/pdfium";
+// The PDFium build (Chrome's PDF engine) as WebAssembly. A file import keeps the path valid in a compiled binary.
+import pdfiumWasm from "@embedpdf/pdfium/pdfium.wasm" with { type: "file" };
 import jpeg from "jpeg-js";
 import { PNG } from "pngjs";
 import type { GrayImage } from "./raster.ts";
@@ -25,7 +28,7 @@ export async function loadPages(path: string, pages?: PageRange): Promise<GrayIm
   if (!(await file.exists())) throw new Error(`File not found: ${path}`);
   const bytes = new Uint8Array(await file.arrayBuffer());
   const kind = sniff(bytes);
-  if (kind === "pdf") return renderPdf(path, pages);
+  if (kind === "pdf") return renderPdf(bytes, pages);
   if (pages && (pages.first !== 1 || (pages.last ?? 1) !== 1)) throw new Error("Page ranges apply only to PDF input.");
   return [kind === "png" ? decodePng(bytes) : decodeJpeg(bytes)];
 }
@@ -61,56 +64,60 @@ function decodeJpeg(bytes: Uint8Array): GrayImage {
   return flattenOnWhiteToGray(img.width, img.height, img.data);
 }
 
-async function renderPdf(path: string, pages?: PageRange): Promise<GrayImage[]> {
-  const args = ["pdftoppm", "-gray", "-r", String(DPI)];
-  if (pages) {
-    args.push("-f", String(pages.first));
-    if (pages.last !== undefined) args.push("-l", String(pages.last));
-  }
-  args.push(path);
-  let proc: Bun.Subprocess<"ignore", "pipe", "pipe">;
-  try {
-    proc = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" });
-  } catch {
-    throw new Error("pdftoppm not found. Install poppler: brew install poppler");
-  }
-  const [out, err, code] = await Promise.all([
-    new Response(proc.stdout).bytes(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-  if (code !== 0) throw new Error(`pdftoppm failed (${code}): ${err.trim()}`);
-  const images = parsePgmStream(out);
-  if (images.length === 0) throw new Error(`No pages rendered from ${path}. Check the page range.`);
-  return images;
+const FPDFBITMAP_GRAY = 1;
+const FPDF_ANNOT = 0x01;
+const FPDF_PRINTING = 0x800;
+const WHITE = 0xffffffff;
+
+let pdfium: Promise<WrappedPdfiumModule> | undefined;
+
+function loadPdfium(): Promise<WrappedPdfiumModule> {
+  pdfium ??= (async () => {
+    const module = await init({ wasmBinary: await Bun.file(pdfiumWasm).arrayBuffer() });
+    module.PDFiumExt_Init();
+    return module;
+  })();
+  return pdfium;
 }
 
-export function parsePgmStream(buf: Uint8Array): GrayImage[] {
-  const pages: GrayImage[] = [];
-  let pos = 0;
-  const isSpace = (c: number) => c === 0x20 || c === 0x0a || c === 0x0d || c === 0x09;
-  const token = (): string => {
-    for (;;) {
-      while (pos < buf.length && isSpace(buf[pos]!)) pos++;
-      if (buf[pos] !== 0x23) break;
-      while (pos < buf.length && buf[pos] !== 0x0a) pos++;
-    }
-    let t = "";
-    while (pos < buf.length && !isSpace(buf[pos]!)) t += String.fromCharCode(buf[pos++]!);
-    return t;
-  };
-  while (pos < buf.length) {
-    const magic = token();
-    if (magic === "") break;
-    if (magic !== "P5") throw new Error(`Expected PGM P5, got ${magic}`);
-    const width = Number(token());
-    const height = Number(token());
-    const maxval = Number(token());
-    if (maxval !== 255) throw new Error(`Unsupported PGM maxval ${maxval}`);
-    pos++;
-    if (pos + width * height > buf.length) throw new Error("Truncated PGM data from pdftoppm");
-    pages.push({ width, height, data: buf.slice(pos, pos + width * height) });
-    pos += width * height;
+/** Renders PDF pages as 8-bit grayscale at the printer resolution, with annotations, in print mode. */
+async function renderPdf(bytes: Uint8Array, pages?: PageRange): Promise<GrayImage[]> {
+  const m = await loadPdfium();
+  const memory = m.pdfium.wasmExports.malloc(bytes.length);
+  m.pdfium.HEAPU8.set(bytes, memory);
+  const doc = m.FPDF_LoadMemDocument(memory, bytes.length, "");
+  try {
+    if (doc === 0) throw new Error(`Cannot open the PDF (PDFium error ${m.FPDF_GetLastError()}).`);
+    const count = m.FPDF_GetPageCount(doc);
+    const first = pages?.first ?? 1;
+    const last = Math.min(pages?.last ?? count, count);
+    if (first > last) throw new Error(`No pages to print: the PDF has ${count} page(s). Check the page range.`);
+    const images: GrayImage[] = [];
+    for (let index = first - 1; index < last; index++) images.push(renderPage(m, doc, index));
+    return images;
+  } finally {
+    if (doc !== 0) m.FPDF_CloseDocument(doc);
+    m.pdfium.wasmExports.free(memory);
   }
-  return pages;
+}
+
+function renderPage(m: WrappedPdfiumModule, doc: number, index: number): GrayImage {
+  const page = m.FPDF_LoadPage(doc, index);
+  if (page === 0) throw new Error(`Cannot load PDF page ${index + 1}.`);
+  const width = Math.ceil((m.FPDF_GetPageWidthF(page) * DPI) / 72);
+  const height = Math.ceil((m.FPDF_GetPageHeightF(page) * DPI) / 72);
+  const bitmap = m.FPDFBitmap_CreateEx(width, height, FPDFBITMAP_GRAY, 0, 0);
+  try {
+    m.FPDFBitmap_FillRect(bitmap, 0, 0, width, height, WHITE);
+    m.FPDF_RenderPageBitmap(bitmap, page, 0, 0, width, height, 0, FPDF_ANNOT | FPDF_PRINTING);
+    const stride = m.FPDFBitmap_GetStride(bitmap);
+    const buffer = m.FPDFBitmap_GetBuffer(bitmap);
+    const data = new Uint8Array(width * height);
+    for (let y = 0; y < height; y++)
+      data.set(m.pdfium.HEAPU8.subarray(buffer + y * stride, buffer + y * stride + width), y * width);
+    return { width, height, data };
+  } finally {
+    m.FPDFBitmap_Destroy(bitmap);
+    m.FPDF_ClosePage(page);
+  }
 }

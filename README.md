@@ -8,10 +8,9 @@ Most commands come from the decompiled Windows driver (`Generic_BP_v2023.2.exe`,
 
 ## Install
 
-You need macOS with the printer on USB, [Bun](https://bun.sh) (tested with 1.4.3), and poppler for PDF input.
+You need macOS with the printer on USB and [Bun](https://bun.sh) (tested with 1.4.3). PDFs render with PDFium, the PDF engine of Chrome, as WebAssembly, so there is nothing else to install.
 
 ```sh
-brew install poppler
 git clone https://github.com/erikmay/bp730i.git
 cd bp730i
 bun install

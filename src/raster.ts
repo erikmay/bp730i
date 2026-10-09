@@ -115,7 +115,7 @@ export function layout(img: GrayImage, opts: RasterOptions): GrayImage {
     const fx = W / img.width;
     const fy = H / img.height;
     const f = opts.scale === "fit" ? Math.min(fx, fy) : Math.max(fx, fy);
-    // pdftoppm rounds page sizes up (100 mm becomes 1182 dots, not 1181). Resampling by such a
+    // PDF pages render with sizes rounded up (100 mm becomes 1182 dots, not 1181). Resampling by such a
     // small factor only blurs barcode bars, so a 1 % difference is centered and cropped instead.
     if (Math.abs(f - 1) > 0.01)
       scaled = resize(img, Math.max(1, Math.round(img.width * f)), Math.max(1, Math.round(img.height * f)));
