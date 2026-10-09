@@ -29,5 +29,6 @@
     "@types/bun": "latest",
     "@types/pngjs": "^6.0.5",
     "typescript": "^7.0.2"
-  }
+  },
+  "license": "MIT"
 }
