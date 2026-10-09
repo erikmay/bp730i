@@ -1,7 +1,7 @@
 {
   "name": "bp730i",
   "version": "0.1.0",
-  "description": "Driverless printing for the Labelident BP730i (Godex RT730i) label printer: EZPL and ZPL output over CUPS or TCP",
+  "description": "Driverless printing for the Labelident BP730i (Godex RT730i) label printer: EZPL output over CUPS or TCP",
   "type": "module",
   "private": true,
   "module": "src/index.ts",
@@ -29,5 +29,6 @@
     "@types/bun": "latest",
     "@types/pngjs": "^6.0.5",
     "typescript": "^7.0.2"
-  }
+  },
+  "license": "MIT"
 }

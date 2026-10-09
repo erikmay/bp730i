@@ -13,7 +13,7 @@ export const LIMITS = {
   feedMm: [0, 100],
   darkness: [0, 19],
   speedIps: [2, 5],
-  stopPositionMm: [-40, 40],
+  stopPositionMm: [0, 40],
   homeXMm: [0, dotsToMm(399)],
   homeYMm: [-dotsToMm(100), dotsToMm(100)],
   cutEvery: [1, 32767],

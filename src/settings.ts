@@ -18,11 +18,12 @@ export type PostPrint =
 export type SensorType = "reflective" | "see-through" | "auto";
 
 /**
- * Printer-independent media and print settings. Every field is optional:
+ * Media and print settings. Every field is optional:
  * a missing field means "send no command, keep what the printer has stored".
  */
 export interface PrintSettings {
   readonly widthMm?: number;
+  /** Sent (^Q) only together with `sensing`, because ^Q also sets the gap or mark. */
   readonly lengthMm?: number;
   readonly sensing?: MediaSensing;
   readonly sensor?: SensorType;
@@ -32,14 +33,12 @@ export interface PrintSettings {
   /** Inches per second. The BP730i accepts 2..5. */
   readonly speedIps?: number;
   readonly postPrint?: PostPrint;
-  /** Where the label stops after printing, in mm (EZPL ^E, 0..40). Tear 12..16, cutter 28..30 per Labelident support PDF. */
+  /** Where the label stops after printing, in mm (^E, 0..40). Tear 12..16, cutter 28..30 per Labelident support PDF. */
   readonly stopPositionMm?: number;
-  /** Printer-side left margin in mm (EZPL ^R, ZPL ^LH). 0 or more. */
+  /** Printer-side left margin in mm (^R). 0 or more. */
   readonly homeXMm?: number;
-  /** Printer-side vertical start offset in mm (EZPL ~Q, ZPL ^LT). Can be negative. */
+  /** Printer-side vertical start offset in mm (~Q). Can be negative. */
   readonly homeYMm?: number;
   readonly mirror?: boolean;
   readonly inverse?: boolean;
 }
-
-export type SettingKey = keyof PrintSettings;

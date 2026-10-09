@@ -5,6 +5,7 @@ import { $ } from "bun";
 const args = Bun.argv.slice(2);
 const root = args.find((a) => !a.startsWith("--")) ?? join(homedir(), "re-bp730i");
 const withGhidra = args.includes("--ghidra");
+const withIlspy = args.includes("--ilspy");
 
 const DOWNLOADS = [
   {
@@ -29,10 +30,22 @@ const DOWNLOADS = [
     url: "https://cdn.labelident.com/media/productattach/l/a/labelident_bp730_bp730i_datasheet_en.pdf",
     sha256: "fe5f181da958c62e6ff548a9a46f48f82b7146a80ba0d7e05f1000ae28dc7602",
   },
+  {
+    // EZPL Programmer's Manual Rev. O.4 on a Godex distributor site.
+    dir: "dl-ezpl",
+    url: "https://godex.com.ua/components/com_jshopping/files/demo_products/EZPL_O.4_EN.pdf",
+    sha256: "31d243c21311f98b30efa6b035903f282f0db68680df5e288dc2971a236ec90c",
+  },
+  {
+    // RT730i user manual (German), linked from the support PDF.
+    dir: "dl-rt730i-manual",
+    url: "https://godex.s3-accelerate.amazonaws.com/NeNyR89wscbEmWS0s6VG1g.preview?v01",
+    sha256: "f9dcfaa4f076431e238096c9d6e6a0ce80cd276060b3b29ca5a06daead2d071d",
+  },
 ];
 
 async function fetchChecked(d: (typeof DOWNLOADS)[number]): Promise<string> {
-  const path = join(root, d.dir, d.url.split("/").pop()!);
+  const path = join(root, d.dir, new URL(d.url).pathname.split("/").pop()!);
   const file = Bun.file(path);
   if (!(await file.exists())) {
     console.log(`download ${d.url}`);
@@ -62,7 +75,21 @@ const gl = join(root, "golabel");
 await $`7z x -y -o${join(gl, "zip")} ${golabelZip!}`.quiet();
 await $`mkdir -p ${join(gl, "msi")} && cd ${join(gl, "msi")} && msiextract ../zip/Setup.msi`.quiet();
 console.log(`Unpacked to ${drv} and ${gl}`);
-console.log("Decompile GoLabel with: ilspycmd -p -o <out> <assembly.dll> (needs a .NET SDK)");
+
+if (withIlspy) {
+  const ilspy = process.env.ILSPYCMD ?? "ilspycmd";
+  for (const assembly of [
+    "GoLabel.exe",
+    "QLabelSDK.dll",
+    "QlabelDlg.dll",
+    "GlobalInfo.dll",
+    "WiFiTool.exe",
+    "LibBLE.dll",
+  ]) {
+    console.log(`decompile ${assembly}`);
+    await $`${ilspy} -p -o ${join(gl, "decomp", assembly.replace(/\.\w+$/, ""))} ${join(gl, "msi", assembly)}`.quiet();
+  }
+}
 
 if (withGhidra) {
   const ghidra = process.env.GHIDRA_HOME;

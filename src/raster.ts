@@ -21,12 +21,43 @@ export interface RasterOptions {
   readonly widthDots: number;
   readonly heightDots: number;
   readonly scale: ScaleMode;
-  readonly rotate: Rotation;
+  /** "auto" turns the image by 90 degrees when it is landscape and the label is portrait, or the reverse. */
+  readonly rotate: Rotation | "auto";
   readonly dither: Dither;
   /** Gray level below which a pixel prints black, 0..255. Used by "threshold" and as the bias of the other modes. */
   readonly threshold: number;
   readonly offsetXDots: number;
   readonly offsetYDots: number;
+  /** Stretch the contrast and lighten the midtones before dithering, to offset thermal dot gain on photos. */
+  readonly photo?: boolean;
+}
+
+/**
+ * Thermal dots print larger than one pixel, so dithered midtones come out much darker than on screen.
+ * Gamma 3 was tuned on the BP730i: a photo dithered without it printed with whole areas closed to black.
+ */
+const PHOTO_GAMMA = 3;
+
+/** Stretches the 1st..99th percentile to full range, then lightens the midtones with PHOTO_GAMMA. */
+export function photoTone(img: GrayImage): GrayImage {
+  const histogram = new Uint32Array(256);
+  for (const v of img.data) histogram[v]!++;
+  const percentile = (p: number) => {
+    let seen = 0;
+    for (let v = 0; v < 256; v++) {
+      seen += histogram[v]!;
+      if (seen >= img.data.length * p) return v;
+    }
+    return 255;
+  };
+  const lo = percentile(0.01);
+  const hi = Math.max(lo + 1, percentile(0.99));
+  const lut = new Uint8Array(256);
+  for (let v = 0; v < 256; v++) {
+    const level = Math.min(1, Math.max(0, (v - lo) / (hi - lo)));
+    lut[v] = Math.round(255 * level ** (1 / PHOTO_GAMMA));
+  }
+  return { ...img, data: img.data.map((v) => lut[v]!) };
 }
 
 export function rotate(img: GrayImage, deg: Rotation): GrayImage {
@@ -153,8 +184,16 @@ export function toBitmap(img: GrayImage, dither: Dither, threshold: number): Bit
   return { width, height, bytesPerRow, data };
 }
 
+function autoRotation(img: GrayImage, opts: RasterOptions): Rotation {
+  const imageOrientation = Math.sign(img.width - img.height);
+  const labelOrientation = Math.sign(opts.widthDots - opts.heightDots);
+  return imageOrientation * labelOrientation < 0 ? 90 : 0;
+}
+
 export function rasterize(img: GrayImage, opts: RasterOptions): Bitmap {
-  return toBitmap(layout(rotate(img, opts.rotate), opts), opts.dither, opts.threshold);
+  const deg = opts.rotate === "auto" ? autoRotation(img, opts) : opts.rotate;
+  const toned = opts.photo ? photoTone(img) : img;
+  return toBitmap(layout(rotate(toned, deg), opts), opts.dither, opts.threshold);
 }
 
 export function bitmapToGray(bmp: Bitmap): GrayImage {
